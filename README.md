@@ -181,23 +181,6 @@ npm run dev
 
 ---
 
-## Key Features
-
-### Smart Content Organization
-Automatically extracts topics and subtopics from any educational text, making content easy to navigate and understand.
-
-### AI-Powered Simplification
-Rewrites complex concepts in simple language perfect for learners with different abilities, including those with learning disabilities.
-
-### Interactive Mind Maps
-Visualizes connections between concepts using an intuitive node-based system with color-coded relationships.
-
-### Auto-Generated Flashcards
-Creates interactive study cards with flipping animation, perfect for quick revision and memorization.
-
-### PDF Support
-Upload NCERT textbooks or any PDF document - the platform extracts and processes everything automatically.
-
 ## Quick Commands Reference
 
 ### Start Both Services (Recommended: Use 2 terminals)
@@ -219,3 +202,4 @@ npm run dev
 Open your browser and go to: **http://localhost:5173**
 
 ---
+
