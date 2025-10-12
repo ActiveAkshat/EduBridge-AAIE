@@ -1,13 +1,14 @@
 import React, { useState, useRef } from "react";
-import { ArrowRight, Upload, Loader, X, BookOpen, Brain, Lightbulb } from "lucide-react";
+import { ArrowRight, Upload, Loader } from "lucide-react";
 import * as api from "../services/api";
-import Output from "./Output"; // Import the Output component
+import Output from "./Output";
 
 function Home() {
   const [file, setFile] = useState(null);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [extractedData, setExtractedData] = useState(null);
+  const [originalData, setOriginalData] = useState(null);
   const [showOutput, setShowOutput] = useState(false);
   const [error, setError] = useState(null);
   const fileRef = useRef(null);
@@ -18,8 +19,9 @@ function Home() {
     setError(null);
     try {
       const response = await api.extractText(text);
-      // API returns { data: [...topics...], message, status }
-      setExtractedData(response.data.data);
+      const topics = response.data.data;
+      setOriginalData(topics);
+      setExtractedData(topics);
       setShowOutput(true);
     } catch (err) {
       setError("Error processing text: " + (err.response?.data?.message || err.message));
@@ -33,8 +35,9 @@ function Home() {
     setError(null);
     try {
       const response = await api.uploadPDF(file);
-      // API returns { data: [...topics...], message, status }
-      setExtractedData(response.data.data);
+      const topics = response.data.data;
+      setOriginalData(topics);
+      setExtractedData(topics);
       setShowOutput(true);
     } catch (err) {
       setError("Error uploading PDF: " + (err.response?.data?.message || err.message));
@@ -45,6 +48,7 @@ function Home() {
   const handleBack = () => {
     setShowOutput(false);
     setExtractedData(null);
+    setOriginalData(null);
     setFile(null);
     setText("");
     setError(null);
@@ -57,12 +61,10 @@ function Home() {
 
   const isActive = text.trim() !== "" || file !== null;
 
-  // Show Output component if data is available
   if (showOutput && extractedData) {
-    return <Output extractedData={extractedData} onBack={handleBack} />;
+    return <Output extractedData={extractedData} originalData={originalData} onBack={handleBack} />;
   }
 
-  // Initial State - Upload/Input Screen
   return (
     <div className="flex flex-col items-center justify-center min-h-screen w-full bg-gray-950 px-6 overflow-hidden">
       <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white text-center mb-3">
