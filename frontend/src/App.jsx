@@ -2,8 +2,8 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import Home from "./pages/Home";
 import History from "./pages/History";
-import Subjects from "./pages/Subjects";
 import About from "./pages/About";
+import Output from "./pages/Output";
 
 function App() {
   return (
@@ -17,7 +17,6 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/history" element={<History />} />
-            <Route path="/subjects" element={<Subjects />} />
             <Route path="/about" element={<About />} />
           </Routes>
         </div>
