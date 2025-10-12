@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, Clock, BookOpen, Info, Settings } from "lucide-react";
+import { Home, Clock, Info, Settings } from "lucide-react";
 
 function Sidebar() {
   const location = useLocation();
@@ -7,7 +7,6 @@ function Sidebar() {
   const links = [
     { to: "/", icon: <Home size={22} />, label: "Home" },
     { to: "/history", icon: <Clock size={22} />, label: "History" },
-    { to: "/subjects", icon: <BookOpen size={22} />, label: "Subjects" },
     { to: "/about", icon: <Info size={22} />, label: "About" },
   ];
 
