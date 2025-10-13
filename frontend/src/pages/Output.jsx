@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { ArrowLeft, RefreshCw, X, Loader } from 'lucide-react';
 import * as api from '../services/api';
 
 const Output = ({ extractedData, originalData, onBack }) => {
@@ -10,7 +10,13 @@ const Output = ({ extractedData, originalData, onBack }) => {
   const [simplificationProgress, setSimplificationProgress] = useState(0);
   const [isSimplifying, setIsSimplifying] = useState(true);
   const [simplificationErrors, setSimplificationErrors] = useState({});
-  const [isProcessing, setIsProcessing] = useState(false); // Prevent duplicate calls
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Mindmap states
+  const [showMindmap, setShowMindmap] = useState(false);
+  const [mindmapData, setMindmapData] = useState(null);
+  const [isGeneratingMindmap, setIsGeneratingMindmap] = useState(false);
+  const [mindmapError, setMindmapError] = useState(null);
 
   useEffect(() => {
     if (topics.length > 0 && !isProcessing) {
@@ -18,11 +24,10 @@ const Output = ({ extractedData, originalData, onBack }) => {
     }
   }, []);
 
-  // Helper function to add delay between API calls
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   const simplifyAllTopics = async () => {
-    if (isProcessing) return; // Prevent duplicate calls
+    if (isProcessing) return;
     
     setIsProcessing(true);
     setIsSimplifying(true);
@@ -32,7 +37,6 @@ const Output = ({ extractedData, originalData, onBack }) => {
     const totalTopics = topics.length;
     const results = [];
     
-    // Process topics sequentially (one by one) with delay
     for (let index = 0; index < topics.length; index++) {
       const topic = topics[index];
       
@@ -47,7 +51,6 @@ const Output = ({ extractedData, originalData, onBack }) => {
           error: null
         });
         
-        // Update progress
         setSimplificationProgress(Math.round(((index + 1) / totalTopics) * 100));
         
       } catch (err) {
@@ -65,17 +68,13 @@ const Output = ({ extractedData, originalData, onBack }) => {
           error: errorMsg
         });
         
-        // Update progress even on error
         setSimplificationProgress(Math.round(((index + 1) / totalTopics) * 100));
       }
       
-      // Update simplified topics as we go (so user sees progress)
       setSimplifiedTopics([...results]);
       
-      // Add 2 second delay between each API call to respect rate limits
-      // This ensures we don't exceed Google's rate limits
       if (index < topics.length - 1) {
-        await delay(2000); // 2 seconds delay = max 30 requests per minute
+        await delay(2000);
       }
     }
     
@@ -128,6 +127,32 @@ const Output = ({ extractedData, originalData, onBack }) => {
     } else {
       setSelectedTopic(topic);
     }
+  };
+
+  const generateMindmap = async () => {
+    if (!selectedTopic) return;
+    
+    setIsGeneratingMindmap(true);
+    setMindmapError(null);
+    setShowMindmap(true);
+    
+    try {
+      const response = await api.generateMindmap({
+        text: selectedTopic.content
+      });
+      
+      setMindmapData(response.data.data);
+    } catch (err) {
+      setMindmapError(err.response?.data?.message || err.message || 'Failed to generate mindmap');
+    } finally {
+      setIsGeneratingMindmap(false);
+    }
+  };
+
+  const closeMindmap = () => {
+    setShowMindmap(false);
+    setMindmapData(null);
+    setMindmapError(null);
   };
 
   if (!topics || topics.length === 0) {
@@ -287,9 +312,14 @@ const Output = ({ extractedData, originalData, onBack }) => {
                 <span className="font-medium">Video Overview</span>
               </button>
               <button
-                disabled
-                className="w-full flex items-center gap-3 px-4 py-3 bg-gray-700 text-gray-500 rounded-lg cursor-not-allowed"
-                title="Coming soon"
+                onClick={generateMindmap}
+                disabled={!selectedTopic || isSimplifying}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
+                  selectedTopic && !isSimplifying
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white cursor-pointer'
+                    : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                }`}
+                title={selectedTopic ? 'Generate Mind Map' : 'Select a topic first'}
               >
                 <span className="text-2xl">🗺️</span>
                 <span className="font-medium">Mind Map</span>
@@ -327,7 +357,155 @@ const Output = ({ extractedData, originalData, onBack }) => {
           </aside>
         </div>
       </main>
+
+      {/* Mindmap Modal */}
+      {showMindmap && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
+          <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <span className="text-2xl">🗺️</span>
+                Mind Map: {selectedTopic?.topic}
+              </h3>
+              <button
+                onClick={closeMindmap}
+                className="p-2 hover:bg-gray-700 rounded-lg transition"
+                title="Close"
+              >
+                <X size={24} className="text-gray-400" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-auto p-4">
+              {isGeneratingMindmap ? (
+                <div className="flex flex-col items-center justify-center h-full space-y-4">
+                  <Loader size={48} className="animate-spin text-purple-500" />
+                  <p className="text-gray-300 text-lg">Generating your mind map...</p>
+                  <p className="text-gray-500 text-sm">This may take a few moments</p>
+                </div>
+              ) : mindmapError ? (
+                <div className="flex flex-col items-center justify-center h-full space-y-4">
+                  <div className="bg-red-900/20 border border-red-500 rounded-lg p-6 max-w-md">
+                    <p className="text-red-300 text-center mb-4">
+                      Failed to generate mind map: {mindmapError}
+                    </p>
+                    <button
+                      onClick={generateMindmap}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
+                    >
+                      <RefreshCw size={16} />
+                      Retry
+                    </button>
+                  </div>
+                </div>
+              ) : mindmapData ? (
+                <div className="bg-white rounded-lg p-4 h-full min-h-[600px]">
+                  <MindmapRenderer data={mindmapData} />
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+};
+
+// Mindmap Renderer Component
+const MindmapRenderer = ({ data }) => {
+  useEffect(() => {
+    if (!data || !window.go) return;
+
+    const $ = window.go.GraphObject.make;
+
+    const diagram = $(window.go.Diagram, 'mindmap-canvas', {
+      layout: $(window.go.TreeLayout, {
+        angle: 0,
+        layerSpacing: 80,
+        nodeSpacing: 40,
+        arrangement: window.go.TreeLayout.ArrangementHorizontal
+      }),
+      'undoManager.isEnabled': true,
+      initialAutoScale: window.go.Diagram.Uniform,
+      contentAlignment: window.go.Spot.Center,
+      padding: 30
+    });
+
+    diagram.nodeTemplate = $(
+      window.go.Node,
+      'Auto',
+      {
+        selectionAdorned: true,
+        shadowVisible: true,
+        shadowColor: '#00000033',
+        shadowOffset: new window.go.Point(0, 3),
+        shadowBlur: 8
+      },
+      $(
+        window.go.Shape,
+        'RoundedRectangle',
+        {
+          strokeWidth: 0,
+          fill: 'lightblue',
+          portId: '',
+          cursor: 'pointer'
+        },
+        new window.go.Binding('fill', 'color')
+      ),
+      $(
+        window.go.Panel,
+        'Horizontal',
+        { margin: 12 },
+        $(
+          window.go.TextBlock,
+          {
+            font: 'bold 20px sans-serif',
+            margin: new window.go.Margin(0, 8, 0, 0),
+            stroke: 'white'
+          },
+          new window.go.Binding('text', 'emoji')
+        ),
+        $(
+          window.go.TextBlock,
+          {
+            font: 'bold 14px sans-serif',
+            stroke: 'white',
+            maxSize: new window.go.Size(180, NaN),
+            wrap: window.go.TextBlock.WrapFit,
+            textAlign: 'center'
+          },
+          new window.go.Binding('text', 'text')
+        )
+      )
+    );
+
+    diagram.linkTemplate = $(
+      window.go.Link,
+      {
+        routing: window.go.Link.Orthogonal,
+        corner: 10,
+        curve: window.go.Link.JumpOver
+      },
+      $(window.go.Shape, { strokeWidth: 3, stroke: '#a0a0a0' })
+    );
+
+    diagram.model = new window.go.GraphLinksModel(
+      data.nodes || [],
+      data.links || []
+    );
+
+    return () => {
+      diagram.div = null;
+    };
+  }, [data]);
+
+  return (
+    <>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/gojs/2.3.11/go.js"></script>
+      <div id="mindmap-canvas" className="w-full h-full min-h-[550px]" />
+    </>
   );
 };
 
