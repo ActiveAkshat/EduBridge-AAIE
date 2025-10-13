@@ -58,18 +58,22 @@ def generate_mindmap_code(client, text: str):
             messages=messages,
             response_format={"type": "json_object"}
         )
-    except OpenAIError as e:
-        print(f"❌ API error: {e}")
+        msg = resp.choices[0].message.content
+        mindmap_data = json.loads(msg)
+        
+        # Validate structure
+        if 'nodes' not in mindmap_data or 'links' not in mindmap_data:
+            raise ValueError("Invalid mindmap structure")
+        
+        # Ensure all nodes have required fields
+        for node in mindmap_data['nodes']:
+            if 'description' not in node:
+                node['description'] = node.get('text', 'No description available')
+            if 'color' not in node:
+                node['color'] = '#4299e1'  # Default blue
+            if 'emoji' not in node:
+                node['emoji'] = '📌'
+        
+        return mindmap_data
+    except (OpenAIError, json.JSONDecodeError, ValueError) as e:
         return {"error": str(e)}
-
-    msg = resp.choices[0].message.content
-
-    try:
-        code = json.loads(msg)
-    except json.JSONDecodeError:
-        print("❌ JSON parse error. Raw output:")
-        print(msg)
-        return {"error": "Invalid JSON output", "raw": msg}
-
-    return code
-

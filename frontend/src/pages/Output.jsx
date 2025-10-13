@@ -173,7 +173,6 @@ const Output = ({ extractedData, originalData, onBack }) => {
         text: selectedTopic.content
       });
       
-      // Handle different response formats
       let flashcards = response.data.data;
       if (flashcards.flashcards) {
         flashcards = flashcards.flashcards;
@@ -442,7 +441,7 @@ const Output = ({ extractedData, originalData, onBack }) => {
                   </div>
                 </div>
               ) : mindmapData ? (
-                <div className="bg-white rounded-lg p-4 h-full min-h-[600px]">
+                <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-lg p-4 h-full min-h-[600px]">
                   <MindmapRenderer data={mindmapData} />
                 </div>
               ) : null}
@@ -466,10 +465,22 @@ const Output = ({ extractedData, originalData, onBack }) => {
   );
 };
 
-// Flashcard Modal Component
+// Flashcard Modal Component with gradient colors
 const FlashcardModal = ({ flashcards, isLoading, error, topicName, onClose, onRetry }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
+
+  // Vibrant gradient colors for flashcards
+  const cardGradients = [
+    'from-purple-600 via-purple-500 to-pink-500',
+    'from-blue-600 via-blue-500 to-cyan-500',
+    'from-green-600 via-emerald-500 to-teal-500',
+    'from-orange-600 via-orange-500 to-yellow-500',
+    'from-red-600 via-rose-500 to-pink-500',
+    'from-indigo-600 via-purple-500 to-pink-500',
+    'from-teal-600 via-cyan-500 to-blue-500',
+    'from-amber-600 via-orange-500 to-red-500',
+  ];
 
   if (isLoading) {
     return (
@@ -516,6 +527,7 @@ const FlashcardModal = ({ flashcards, isLoading, error, topicName, onClose, onRe
 
   const currentCard = flashcards[currentIndex];
   const totalCards = flashcards.length;
+  const currentGradient = cardGradients[currentIndex % cardGradients.length];
 
   const handleNext = () => {
     if (currentIndex < totalCards - 1) {
@@ -585,13 +597,13 @@ const FlashcardModal = ({ flashcards, isLoading, error, topicName, onClose, onRe
             style={{ cursor: 'pointer' }}
           >
             {/* Front of card (Question) */}
-            <div className="flashcard-face flashcard-front bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl p-12 shadow-2xl border border-gray-700 min-h-[400px] flex flex-col items-center justify-center">
+            <div className={`flashcard-face flashcard-front bg-gradient-to-br ${currentGradient} rounded-3xl p-12 shadow-2xl border-2 border-white/20 min-h-[400px] flex flex-col items-center justify-center`}>
               <div className="text-center">
-                <p className="text-white text-2xl leading-relaxed font-medium">
+                <p className="text-white text-2xl leading-relaxed font-medium drop-shadow-lg">
                   {currentCard.question}
                 </p>
                 {!isFlipped && (
-                  <button className="mt-8 px-6 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm transition">
+                  <button className="mt-8 px-6 py-2 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white rounded-lg text-sm transition border border-white/30">
                     See answer
                   </button>
                 )}
@@ -599,15 +611,15 @@ const FlashcardModal = ({ flashcards, isLoading, error, topicName, onClose, onRe
             </div>
 
             {/* Back of card (Answer) */}
-            <div className="flashcard-face flashcard-back bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl p-12 shadow-2xl border border-gray-700 min-h-[400px] flex flex-col items-center justify-center">
+            <div className={`flashcard-face flashcard-back bg-gradient-to-br ${currentGradient} rounded-3xl p-12 shadow-2xl border-2 border-white/20 min-h-[400px] flex flex-col items-center justify-center`}>
               <div className="text-center w-full">
-                <p className="text-white text-2xl leading-relaxed font-medium">
+                <p className="text-white text-2xl leading-relaxed font-medium drop-shadow-lg">
                   {currentCard.answer}
                 </p>
                 {currentCard.explanation && (
                   <button
                     onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-2 mx-auto mt-6 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm transition"
+                    className="flex items-center gap-2 mx-auto mt-6 px-4 py-2 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white rounded-lg text-sm transition border border-white/30"
                   >
                     <RotateCcw size={16} />
                     Explain
@@ -687,7 +699,7 @@ const FlashcardModal = ({ flashcards, isLoading, error, topicName, onClose, onRe
   );
 };
 
-// Mindmap Renderer Component
+// Mindmap Renderer Component with dark background and tooltip
 const MindmapRenderer = ({ data }) => {
   useEffect(() => {
     if (!data || !window.go) return;
@@ -707,36 +719,71 @@ const MindmapRenderer = ({ data }) => {
       padding: 30
     });
 
+    // Tooltip template
+    const tooltipTemplate = $(
+      'ToolTip',
+      $(
+        window.go.Panel,
+        'Auto',
+        $(
+          window.go.Shape,
+          'RoundedRectangle',
+          {
+            fill: 'rgba(17, 24, 39, 0.95)',
+            stroke: '#60a5fa',
+            strokeWidth: 2
+          }
+        ),
+        $(
+          window.go.TextBlock,
+          {
+            margin: 10,
+            stroke: 'white',
+            font: '14px sans-serif',
+            maxSize: new window.go.Size(300, NaN),
+            wrap: window.go.TextBlock.WrapFit
+          },
+          new window.go.Binding('text', 'description')
+        )
+      )
+    );
+
     diagram.nodeTemplate = $(
       window.go.Node,
       'Auto',
       {
         selectionAdorned: true,
         shadowVisible: true,
-        shadowColor: '#00000033',
-        shadowOffset: new window.go.Point(0, 3),
-        shadowBlur: 8
+        shadowColor: '#00000055',
+        shadowOffset: new window.go.Point(0, 4),
+        shadowBlur: 12,
+        toolTip: tooltipTemplate
       },
       $(
         window.go.Shape,
         'RoundedRectangle',
         {
-          strokeWidth: 0,
+          strokeWidth: 2,
+          stroke: '#4b5563',
           fill: 'lightblue',
           portId: '',
           cursor: 'pointer'
         },
-        new window.go.Binding('fill', 'color')
+        new window.go.Binding('fill', 'color'),
+        new window.go.Binding('stroke', 'color', (color) => {
+          // Darken the color for border
+          return color ? color.replace(/\d+/g, (n) => Math.max(0, parseInt(n) - 40)) : '#4b5563';
+        })
       ),
       $(
         window.go.Panel,
         'Horizontal',
-        { margin: 12 },
+        { margin: 14 },
         $(
           window.go.TextBlock,
           {
-            font: 'bold 20px sans-serif',
-            margin: new window.go.Margin(0, 8, 0, 0),
+            font: 'bold 22px sans-serif',
+            margin: new window.go.Margin(0, 10, 0, 0),
             stroke: 'white'
           },
           new window.go.Binding('text', 'emoji')
@@ -744,9 +791,9 @@ const MindmapRenderer = ({ data }) => {
         $(
           window.go.TextBlock,
           {
-            font: 'bold 14px sans-serif',
+            font: 'bold 15px sans-serif',
             stroke: 'white',
-            maxSize: new window.go.Size(180, NaN),
+            maxSize: new window.go.Size(200, NaN),
             wrap: window.go.TextBlock.WrapFit,
             textAlign: 'center'
           },
@@ -759,10 +806,10 @@ const MindmapRenderer = ({ data }) => {
       window.go.Link,
       {
         routing: window.go.Link.Orthogonal,
-        corner: 10,
+        corner: 12,
         curve: window.go.Link.JumpOver
       },
-      $(window.go.Shape, { strokeWidth: 3, stroke: '#a0a0a0' })
+      $(window.go.Shape, { strokeWidth: 3, stroke: '#6b7280' })
     );
 
     diagram.model = new window.go.GraphLinksModel(
