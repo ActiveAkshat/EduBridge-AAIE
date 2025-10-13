@@ -701,6 +701,9 @@ const FlashcardModal = ({ flashcards, isLoading, error, topicName, onClose, onRe
 
 // Mindmap Renderer Component with dark background and tooltip
 const MindmapRenderer = ({ data }) => {
+  const [hoveredNode, setHoveredNode] = useState(null);
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+
   useEffect(() => {
     if (!data || !window.go) return;
 
@@ -719,35 +722,6 @@ const MindmapRenderer = ({ data }) => {
       padding: 30
     });
 
-    // Tooltip template
-    const tooltipTemplate = $(
-      'ToolTip',
-      $(
-        window.go.Panel,
-        'Auto',
-        $(
-          window.go.Shape,
-          'RoundedRectangle',
-          {
-            fill: 'rgba(17, 24, 39, 0.95)',
-            stroke: '#60a5fa',
-            strokeWidth: 2
-          }
-        ),
-        $(
-          window.go.TextBlock,
-          {
-            margin: 10,
-            stroke: 'white',
-            font: '14px sans-serif',
-            maxSize: new window.go.Size(300, NaN),
-            wrap: window.go.TextBlock.WrapFit
-          },
-          new window.go.Binding('text', 'description')
-        )
-      )
-    );
-
     diagram.nodeTemplate = $(
       window.go.Node,
       'Auto',
@@ -757,7 +731,21 @@ const MindmapRenderer = ({ data }) => {
         shadowColor: '#00000055',
         shadowOffset: new window.go.Point(0, 4),
         shadowBlur: 12,
-        toolTip: tooltipTemplate
+        mouseEnter: (e, node) => {
+          const data = node.data;
+          if (data && data.description) {
+            const docPoint = e.diagram.lastInput.documentPoint;
+            const viewPoint = e.diagram.transformDocToView(docPoint);
+            setTooltipPos({ 
+              x: viewPoint.x + 20, 
+              y: viewPoint.y - 10 
+            });
+            setHoveredNode(data);
+          }
+        },
+        mouseLeave: (e, node) => {
+          setHoveredNode(null);
+        }
       },
       $(
         window.go.Shape,
@@ -771,8 +759,13 @@ const MindmapRenderer = ({ data }) => {
         },
         new window.go.Binding('fill', 'color'),
         new window.go.Binding('stroke', 'color', (color) => {
+          if (!color) return '#4b5563';
           // Darken the color for border
-          return color ? color.replace(/\d+/g, (n) => Math.max(0, parseInt(n) - 40)) : '#4b5563';
+          const hex = color.replace('#', '');
+          const r = Math.max(0, parseInt(hex.substr(0, 2), 16) - 40);
+          const g = Math.max(0, parseInt(hex.substr(2, 2), 16) - 40);
+          const b = Math.max(0, parseInt(hex.substr(4, 2), 16) - 40);
+          return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
         })
       ),
       $(
@@ -823,10 +816,29 @@ const MindmapRenderer = ({ data }) => {
   }, [data]);
 
   return (
-    <>
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/gojs/2.3.11/go.js"></script>
+    <div className="relative w-full h-full">
       <div id="mindmap-canvas" className="w-full h-full min-h-[550px]" />
-    </>
+      
+      {/* Custom Tooltip */}
+      {hoveredNode && hoveredNode.description && (
+        <div
+          className="absolute z-50 pointer-events-none"
+          style={{
+            left: `${tooltipPos.x}px`,
+            top: `${tooltipPos.y}px`,
+            transform: 'translate(0, -100%)'
+          }}
+        >
+          <div className="bg-gray-900 border-2 border-blue-500 rounded-lg shadow-2xl p-3 max-w-xs">
+            <p className="text-white text-sm leading-relaxed">
+              {hoveredNode.description}
+            </p>
+          </div>
+          {/* Arrow pointing down */}
+          <div className="absolute left-4 -bottom-2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-blue-500" />
+        </div>
+      )}
+    </div>
   );
 };
 
