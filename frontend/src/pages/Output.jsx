@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, RefreshCw, X, Loader } from 'lucide-react';
+import { ArrowLeft, RefreshCw, X, Loader, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import * as api from '../services/api';
 
 const Output = ({ extractedData, originalData, onBack }) => {
@@ -17,6 +17,12 @@ const Output = ({ extractedData, originalData, onBack }) => {
   const [mindmapData, setMindmapData] = useState(null);
   const [isGeneratingMindmap, setIsGeneratingMindmap] = useState(false);
   const [mindmapError, setMindmapError] = useState(null);
+
+  // Flashcard states
+  const [showFlashcards, setShowFlashcards] = useState(false);
+  const [flashcardsData, setFlashcardsData] = useState(null);
+  const [isGeneratingFlashcards, setIsGeneratingFlashcards] = useState(false);
+  const [flashcardsError, setFlashcardsError] = useState(null);
 
   useEffect(() => {
     if (topics.length > 0 && !isProcessing) {
@@ -153,6 +159,38 @@ const Output = ({ extractedData, originalData, onBack }) => {
     setShowMindmap(false);
     setMindmapData(null);
     setMindmapError(null);
+  };
+
+  const generateFlashcards = async () => {
+    if (!selectedTopic) return;
+    
+    setIsGeneratingFlashcards(true);
+    setFlashcardsError(null);
+    setShowFlashcards(true);
+    
+    try {
+      const response = await api.generateFlashcards({
+        text: selectedTopic.content
+      });
+      
+      // Handle different response formats
+      let flashcards = response.data.data;
+      if (flashcards.flashcards) {
+        flashcards = flashcards.flashcards;
+      }
+      
+      setFlashcardsData(flashcards);
+    } catch (err) {
+      setFlashcardsError(err.response?.data?.message || err.message || 'Failed to generate flashcards');
+    } finally {
+      setIsGeneratingFlashcards(false);
+    }
+  };
+
+  const closeFlashcards = () => {
+    setShowFlashcards(false);
+    setFlashcardsData(null);
+    setFlashcardsError(null);
   };
 
   if (!topics || topics.length === 0) {
@@ -333,9 +371,14 @@ const Output = ({ extractedData, originalData, onBack }) => {
                 <span className="font-medium">Reports</span>
               </button>
               <button
-                disabled
-                className="w-full flex items-center gap-3 px-4 py-3 bg-gray-700 text-gray-500 rounded-lg cursor-not-allowed"
-                title="Coming soon"
+                onClick={generateFlashcards}
+                disabled={!selectedTopic || isSimplifying}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
+                  selectedTopic && !isSimplifying
+                    ? 'bg-green-600 hover:bg-green-700 text-white cursor-pointer'
+                    : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                }`}
+                title={selectedTopic ? 'Generate Flashcards' : 'Select a topic first'}
               >
                 <span className="text-2xl">🗂️</span>
                 <span className="font-medium">Flashcards</span>
@@ -362,7 +405,6 @@ const Output = ({ extractedData, originalData, onBack }) => {
       {showMindmap && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
           <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
-            {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-700">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <span className="text-2xl">🗺️</span>
@@ -377,7 +419,6 @@ const Output = ({ extractedData, originalData, onBack }) => {
               </button>
             </div>
 
-            {/* Modal Content */}
             <div className="flex-1 overflow-auto p-4">
               {isGeneratingMindmap ? (
                 <div className="flex flex-col items-center justify-center h-full space-y-4">
@@ -409,6 +450,239 @@ const Output = ({ extractedData, originalData, onBack }) => {
           </div>
         </div>
       )}
+
+      {/* Flashcards Modal */}
+      {showFlashcards && (
+        <FlashcardModal
+          flashcards={flashcardsData}
+          isLoading={isGeneratingFlashcards}
+          error={flashcardsError}
+          topicName={selectedTopic?.topic}
+          onClose={closeFlashcards}
+          onRetry={generateFlashcards}
+        />
+      )}
+    </div>
+  );
+};
+
+// Flashcard Modal Component
+const FlashcardModal = ({ flashcards, isLoading, error, topicName, onClose, onRetry }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isFlipped, setIsFlipped] = useState(false);
+
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 p-4">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader size={48} className="animate-spin text-green-500" />
+          <p className="text-gray-300 text-lg">Generating flashcards...</p>
+          <p className="text-gray-500 text-sm">This may take a few moments</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 p-4">
+        <div className="bg-gray-800 rounded-xl p-6 max-w-md">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold text-white">Error</h3>
+            <button onClick={onClose} className="text-gray-400 hover:text-white">
+              <X size={24} />
+            </button>
+          </div>
+          <div className="bg-red-900/20 border border-red-500 rounded-lg p-6">
+            <p className="text-red-300 text-center mb-4">
+              Failed to generate flashcards: {error}
+            </p>
+            <button
+              onClick={onRetry}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
+            >
+              <RefreshCw size={16} />
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!flashcards || flashcards.length === 0) {
+    return null;
+  }
+
+  const currentCard = flashcards[currentIndex];
+  const totalCards = flashcards.length;
+
+  const handleNext = () => {
+    if (currentIndex < totalCards - 1) {
+      setCurrentIndex(currentIndex + 1);
+      setIsFlipped(false);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+      setIsFlipped(false);
+    }
+  };
+
+  const handleFlip = () => {
+    setIsFlipped(!isFlipped);
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ') {
+      e.preventDefault();
+      if (!isFlipped) {
+        handleFlip();
+      } else {
+        handleNext();
+      }
+    } else if (e.key === 'ArrowLeft' || e.key === '-') {
+      e.preventDefault();
+      handlePrevious();
+    }
+  };
+
+  return (
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 p-4"
+      onKeyDown={handleKeyPress}
+      tabIndex={0}
+      autoFocus
+    >
+      <div className="w-full max-w-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-white">{topicName} Flashcards</h2>
+            <p className="text-gray-400 text-sm mt-1">Based on 1 source</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-800 rounded-lg transition text-white"
+            title="Close"
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        {/* Keyboard hint */}
+        <div className="text-center text-gray-400 text-sm mb-4">
+          Press 'Space' to flip, '←' / '→' to navigate
+        </div>
+
+        {/* Flashcard Container */}
+        <div className="relative perspective-container">
+          <div
+            className={`flashcard-3d ${isFlipped ? 'flipped' : ''}`}
+            onClick={handleFlip}
+            style={{ cursor: 'pointer' }}
+          >
+            {/* Front of card (Question) */}
+            <div className="flashcard-face flashcard-front bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl p-12 shadow-2xl border border-gray-700 min-h-[400px] flex flex-col items-center justify-center">
+              <div className="text-center">
+                <p className="text-white text-2xl leading-relaxed font-medium">
+                  {currentCard.question}
+                </p>
+                {!isFlipped && (
+                  <button className="mt-8 px-6 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm transition">
+                    See answer
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Back of card (Answer) */}
+            <div className="flashcard-face flashcard-back bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl p-12 shadow-2xl border border-gray-700 min-h-[400px] flex flex-col items-center justify-center">
+              <div className="text-center w-full">
+                <p className="text-white text-2xl leading-relaxed font-medium">
+                  {currentCard.answer}
+                </p>
+                {currentCard.explanation && (
+                  <button
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-2 mx-auto mt-6 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm transition"
+                  >
+                    <RotateCcw size={16} />
+                    Explain
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <div className="flex items-center justify-center gap-6 mt-8">
+          <button
+            onClick={handlePrevious}
+            disabled={currentIndex === 0}
+            className={`p-3 rounded-full transition ${
+              currentIndex === 0
+                ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                : 'bg-gray-700 hover:bg-gray-600 text-white'
+            }`}
+          >
+            <ChevronLeft size={24} />
+          </button>
+
+          <div className="text-white text-lg font-semibold min-w-[80px] text-center">
+            {currentIndex + 1} / {totalCards}
+          </div>
+
+          <button
+            onClick={handleNext}
+            disabled={currentIndex === totalCards - 1}
+            className={`p-3 rounded-full transition ${
+              currentIndex === totalCards - 1
+                ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
+          >
+            <ChevronRight size={24} />
+          </button>
+        </div>
+      </div>
+
+      <style>{`
+        .perspective-container {
+          perspective: 1000px;
+        }
+
+        .flashcard-3d {
+          position: relative;
+          width: 100%;
+          transition: transform 0.6s;
+          transform-style: preserve-3d;
+        }
+
+        .flashcard-3d.flipped {
+          transform: rotateY(180deg);
+        }
+
+        .flashcard-face {
+          width: 100%;
+          backface-visibility: hidden;
+          -webkit-backface-visibility: hidden;
+        }
+
+        .flashcard-front {
+          position: relative;
+        }
+
+        .flashcard-back {
+          position: absolute;
+          top: 0;
+          left: 0;
+          transform: rotateY(180deg);
+        }
+      `}</style>
     </div>
   );
 };
