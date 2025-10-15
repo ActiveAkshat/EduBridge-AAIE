@@ -24,6 +24,9 @@ const Output = ({ extractedData, originalData, onBack }) => {
   const [isGeneratingFlashcards, setIsGeneratingFlashcards] = useState(false);
   const [flashcardsError, setFlashcardsError] = useState(null);
 
+  // Concept cards view state
+  const [showConceptCards, setShowConceptCards] = useState(false);
+
   useEffect(() => {
     if (topics.length > 0 && !isProcessing) {
       simplifyAllTopics();
@@ -157,6 +160,7 @@ const Output = ({ extractedData, originalData, onBack }) => {
 
   const closeMindmap = () => {
     setShowMindmap(false);
+    setShowConceptCards(false);
     setMindmapData(null);
     setMindmapError(null);
   };
@@ -400,7 +404,7 @@ const Output = ({ extractedData, originalData, onBack }) => {
         </div>
       </main>
 
-      {/* Mindmap Modal */}
+      {/* Mindmap Modal with Tabs */}
       {showMindmap && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
           <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
@@ -417,6 +421,32 @@ const Output = ({ extractedData, originalData, onBack }) => {
                 <X size={24} className="text-gray-400" />
               </button>
             </div>
+
+            {/* Tabs */}
+            {!isGeneratingMindmap && !mindmapError && mindmapData && (
+              <div className="flex gap-2 px-4 pt-4 border-b border-gray-700">
+                <button
+                  onClick={() => setShowConceptCards(false)}
+                  className={`px-4 py-2 rounded-t-lg transition ${
+                    !showConceptCards
+                      ? 'bg-gray-700 text-white'
+                      : 'bg-gray-900 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Mind Map View
+                </button>
+                <button
+                  onClick={() => setShowConceptCards(true)}
+                  className={`px-4 py-2 rounded-t-lg transition ${
+                    showConceptCards
+                      ? 'bg-gray-700 text-white'
+                      : 'bg-gray-900 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  📚 Concept Cards
+                </button>
+              </div>
+            )}
 
             <div className="flex-1 overflow-auto p-4">
               {isGeneratingMindmap ? (
@@ -441,9 +471,13 @@ const Output = ({ extractedData, originalData, onBack }) => {
                   </div>
                 </div>
               ) : mindmapData ? (
-                <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-lg p-4 h-full min-h-[600px]">
-                  <MindmapRenderer data={mindmapData} />
-                </div>
+                showConceptCards ? (
+                  <ConceptCardsView nodes={mindmapData.nodes || []} />
+                ) : (
+                  <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-lg p-4 h-full min-h-[600px]">
+                    <MindmapRenderer data={mindmapData} />
+                  </div>
+                )
               ) : null}
             </div>
           </div>
@@ -465,12 +499,48 @@ const Output = ({ extractedData, originalData, onBack }) => {
   );
 };
 
+// Concept Cards View Component
+const ConceptCardsView = ({ nodes }) => {
+  if (!nodes || nodes.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-gray-400">No concept cards available</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
+      {nodes.map((node, idx) => {
+        const color = node.color || '#4299e1';
+        const emoji = node.emoji || '📌';
+        const text = node.text || 'N/A';
+        const description = node.description || 'No description available';
+
+        return (
+          <div
+            key={idx}
+            className="concept-card rounded-2xl p-6 shadow-xl transition-all duration-300 hover:scale-105 hover:shadow-2xl"
+            style={{
+              background: `linear-gradient(135deg, ${color}ee, ${color})`,
+              color: 'white'
+            }}
+          >
+            <div className="text-4xl mb-3">{emoji}</div>
+            <h3 className="text-xl font-bold mb-2">{text}</h3>
+            <p className="text-sm opacity-95 leading-relaxed">{description}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 // Flashcard Modal Component with gradient colors
 const FlashcardModal = ({ flashcards, isLoading, error, topicName, onClose, onRetry }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
 
-  // Vibrant gradient colors for flashcards
   const cardGradients = [
     'from-purple-600 via-purple-500 to-pink-500',
     'from-blue-600 via-blue-500 to-cyan-500',
@@ -569,7 +639,6 @@ const FlashcardModal = ({ flashcards, isLoading, error, topicName, onClose, onRe
       autoFocus
     >
       <div className="w-full max-w-2xl">
-        {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-2xl font-bold text-white">{topicName} Flashcards</h2>
@@ -584,19 +653,16 @@ const FlashcardModal = ({ flashcards, isLoading, error, topicName, onClose, onRe
           </button>
         </div>
 
-        {/* Keyboard hint */}
         <div className="text-center text-gray-400 text-sm mb-4">
           Press 'Space' to flip, '←' / '→' to navigate
         </div>
 
-        {/* Flashcard Container */}
         <div className="relative perspective-container">
           <div
             className={`flashcard-3d ${isFlipped ? 'flipped' : ''}`}
             onClick={handleFlip}
             style={{ cursor: 'pointer' }}
           >
-            {/* Front of card (Question) */}
             <div className={`flashcard-face flashcard-front bg-gradient-to-br ${currentGradient} rounded-3xl p-12 shadow-2xl border-2 border-white/20 min-h-[400px] flex flex-col items-center justify-center`}>
               <div className="text-center">
                 <p className="text-white text-2xl leading-relaxed font-medium drop-shadow-lg">
@@ -610,7 +676,6 @@ const FlashcardModal = ({ flashcards, isLoading, error, topicName, onClose, onRe
               </div>
             </div>
 
-            {/* Back of card (Answer) */}
             <div className={`flashcard-face flashcard-back bg-gradient-to-br ${currentGradient} rounded-3xl p-12 shadow-2xl border-2 border-white/20 min-h-[400px] flex flex-col items-center justify-center`}>
               <div className="text-center w-full">
                 <p className="text-white text-2xl leading-relaxed font-medium drop-shadow-lg">
@@ -630,7 +695,6 @@ const FlashcardModal = ({ flashcards, isLoading, error, topicName, onClose, onRe
           </div>
         </div>
 
-        {/* Navigation */}
         <div className="flex items-center justify-center gap-6 mt-8">
           <button
             onClick={handlePrevious}
@@ -760,7 +824,6 @@ const MindmapRenderer = ({ data }) => {
         new window.go.Binding('fill', 'color'),
         new window.go.Binding('stroke', 'color', (color) => {
           if (!color) return '#4b5563';
-          // Darken the color for border
           const hex = color.replace('#', '');
           const r = Math.max(0, parseInt(hex.substr(0, 2), 16) - 40);
           const g = Math.max(0, parseInt(hex.substr(2, 2), 16) - 40);
@@ -819,7 +882,6 @@ const MindmapRenderer = ({ data }) => {
     <div className="relative w-full h-full">
       <div id="mindmap-canvas" className="w-full h-full min-h-[550px]" />
       
-      {/* Custom Tooltip */}
       {hoveredNode && hoveredNode.description && (
         <div
           className="absolute z-50 pointer-events-none"
@@ -834,7 +896,6 @@ const MindmapRenderer = ({ data }) => {
               {hoveredNode.description}
             </p>
           </div>
-          {/* Arrow pointing down */}
           <div className="absolute left-4 -bottom-2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-blue-500" />
         </div>
       )}
