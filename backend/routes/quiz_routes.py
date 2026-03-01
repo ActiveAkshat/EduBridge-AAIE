@@ -1,6 +1,6 @@
 from flask import Blueprint, request
 from utils.response_formatter import success_response, error_response
-from utils.gemini_client import initialize_openai_client
+from utils.gemini_client import initialize_quiz_client
 from services.quiz_service import generate_quiz
 
 quiz_bp = Blueprint("quiz_bp", __name__)

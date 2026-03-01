@@ -1,6 +1,6 @@
 from flask import Blueprint, request
 from utils.response_formatter import success_response, error_response
-from utils.gemini_client import initialize_openai_client
+from utils.gemini_client import initialize_flashcards_client
 from services.flashcard_service import generate_flashcards
 
 flashcard_bp = Blueprint("flashcard_bp", __name__)

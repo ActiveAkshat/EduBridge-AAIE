@@ -1,6 +1,6 @@
 from flask import Blueprint, request
 from utils.response_formatter import success_response, error_response
-from utils.gemini_client import initialize_openai_client
+from utils.gemini_client import initialize_simplify_client
 from services.simplify_service import simplify_text
 
 simplify_bp = Blueprint("simplify_bp", __name__)

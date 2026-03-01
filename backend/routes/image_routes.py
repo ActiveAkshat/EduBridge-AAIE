@@ -1,6 +1,6 @@
 from flask import Blueprint, request
 from utils.response_formatter import success_response, error_response
-from utils.gemini_client import initialize_openai_client
+from utils.gemini_client import initialize_imageprompt_client
 from services.image_service import generate_image_prompts, generate_images_runware
 
 

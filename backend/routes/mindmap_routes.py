@@ -1,6 +1,6 @@
 from flask import Blueprint, request
 from utils.response_formatter import success_response, error_response
-from utils.gemini_client import initialize_openai_client
+from utils.gemini_client import initialize_mindmap_client
 from services.mindmap_service import generate_mindmap_code
 
 mindmap_bp = Blueprint("mindmap_bp", __name__)
