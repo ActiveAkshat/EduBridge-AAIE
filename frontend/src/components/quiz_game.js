@@ -168,6 +168,7 @@ let resultPhase, resultTimer, resultCorrect, resultQ;
 let questionX;
 let boxesX;
 let currentQBoxH = Q_BOX_H_MIN;  // dynamic question box height
+let wingTick =0;
 
 function initGame() {
   currentQBoxH = computeQBoxH(QUIZ_DATA[0].question);
@@ -197,6 +198,7 @@ function initGame() {
   resultTimer  = 0;
   questionX    = -Q_BOX_W;
   boxesX       = W + 20;
+  wingTick = 0;
 
   stars = Array.from({ length: 70 }, () => ({
     x: Math.random() * W,
@@ -263,6 +265,7 @@ function checkAnswer(lane) {
 // ═══════════════════════════════════════
 function update() {
   // Slide-in animations
+  wingTick += 0.18;
   if (questionX < Q_BOX_X) questionX = Math.min(Q_BOX_X, questionX + 22);
   const layout = getLayout(currentQBoxH);
   if (boxesX > layout.boxX) boxesX = Math.max(layout.boxX, boxesX - 22);
@@ -365,7 +368,7 @@ function draw() {
     drawQuestionBox(layout);
     drawAnswerBoxes(layout);
     drawBird();
-    drawTrail();
+    drawEngineTrail();
   }
 
   drawParticlesCanvas();
@@ -562,58 +565,175 @@ function drawAnswerBoxes(layout) {
 
 // ── Bird ──
 let trailPoints = [];
-function drawTrail() {
-  trailPoints.push({ x: bird.x + BIRD_W / 2, y: bird.y + BIRD_H / 2, t: 1 });
-  if (trailPoints.length > 18) trailPoints.shift();
+function drawEngineTrail() {
+  trailPoints.push({ x: bird.x + 2, y: bird.y + BIRD_H / 2, age: 0 });
+  if (trailPoints.length > 28) trailPoints.shift();
   trailPoints.forEach((p, i) => {
-    p.t -= 0.04;
-    const a = Math.max(0, p.t * 0.4);
+    p.age++;
+    const life = 1 - p.age / 28;
+    if (life <= 0) return;
+    const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 6 * life);
+    grad.addColorStop(0, 'rgba(255,200,60,' + (life * 0.9) + ')');
+grad.addColorStop(0.4, 'rgba(255,100,20,' + (life * 0.5) + ')');
+grad.addColorStop(1, 'rgba(180,30,0,0)');
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 3 + i * 0.3, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(245, 166, 35, ' + a + ')';
+    ctx.arc(p.x, p.y, 6 * life + 1, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
     ctx.fill();
   });
 }
 
+// ── Bird — sleek spaceship/jet ──
 function drawBird() {
-  const bx = bird.x;
-  const by = bird.y;
+  const cx = bird.x + BIRD_W / 2;
+  const cy = bird.y + BIRD_H / 2;
+  const tilt = Math.min(Math.max(bird.vy * 2.5, -20), 20);
 
   ctx.save();
-  ctx.translate(bx + BIRD_W / 2, by + BIRD_H / 2);
-  ctx.rotate((bird.rotation * Math.PI) / 180);
+  ctx.translate(cx, cy);
+  ctx.rotate((tilt * Math.PI) / 180);
 
-  ctx.shadowColor = 'rgba(245,166,35,0.6)';
-  ctx.shadowBlur  = 14;
-
-  const bg = ctx.createRadialGradient(-3, -4, 2, 0, 0, BIRD_W / 2);
-  bg.addColorStop(0, '#ffe082');
-  bg.addColorStop(1, '#f5a623');
-  ctx.fillStyle = bg;
+  // === ENGINE GLOW (behind body) ===
+  const engineGlow = ctx.createRadialGradient(-BIRD_W / 2 - 4, 0, 1, -BIRD_W / 2, 0, 14);
+  engineGlow.addColorStop(0, 'rgba(255,160,30,0.9)');
+  engineGlow.addColorStop(0.5, 'rgba(255,80,10,0.4)');
+  engineGlow.addColorStop(1, 'rgba(200,30,0,0)');
+  ctx.fillStyle = engineGlow;
   ctx.beginPath();
-  ctx.ellipse(0, 0, BIRD_W / 2, BIRD_H / 2, 0, 0, Math.PI * 2);
+  ctx.ellipse(-BIRD_W / 2 - 2, 0, 14, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // === MAIN BODY ===
+  // Fuselage — sleek torpedo shape
+  const bodyGrad = ctx.createLinearGradient(-BIRD_W / 2, -BIRD_H / 2, BIRD_W / 2, BIRD_H / 2);
+  bodyGrad.addColorStop(0, '#c8d8ff');
+  bodyGrad.addColorStop(0.3, '#7eb8f7');
+  bodyGrad.addColorStop(0.7, '#2d7dd2');
+  bodyGrad.addColorStop(1, '#1a4f8a');
+  ctx.fillStyle = bodyGrad;
+  ctx.shadowColor = 'rgba(100,180,255,0.5)';
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  // Pointed nose right, rounded tail left
+  ctx.moveTo(BIRD_W / 2, 0);           // nose tip
+  ctx.bezierCurveTo(BIRD_W / 2 - 4, -BIRD_H / 2 + 2, -BIRD_W / 4, -BIRD_H / 2, -BIRD_W / 2 + 4, -BIRD_H / 2 + 6);
+  ctx.lineTo(-BIRD_W / 2, 0);          // tail center
+  ctx.lineTo(-BIRD_W / 2 + 4, BIRD_H / 2 - 6);
+  ctx.bezierCurveTo(-BIRD_W / 4, BIRD_H / 2, BIRD_W / 2 - 4, BIRD_H / 2 - 2, BIRD_W / 2, 0);
+  ctx.closePath();
   ctx.fill();
   ctx.shadowBlur = 0;
 
-  ctx.fillStyle = '#e67e22';
+  // Body highlight stripe (top)
+  const hlGrad = ctx.createLinearGradient(0, -BIRD_H / 2, 0, 0);
+  hlGrad.addColorStop(0, 'rgba(255,255,255,0.45)');
+  hlGrad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = hlGrad;
   ctx.beginPath();
-  ctx.ellipse(-3, bird.flap > 0 ? -9 : 5, 10, 6, -0.3, 0, Math.PI * 2);
+  ctx.moveTo(BIRD_W / 2 - 2, -1);
+  ctx.bezierCurveTo(BIRD_W / 2 - 5, -BIRD_H / 2 + 3, -BIRD_W / 4, -BIRD_H / 2 + 1, -BIRD_W / 2 + 6, -BIRD_H / 2 + 7);
+  ctx.lineTo(-BIRD_W / 3, -2);
+  ctx.bezierCurveTo(0, -BIRD_H / 4, BIRD_W / 4, -BIRD_H / 4, BIRD_W / 2 - 2, -1);
+  ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = '#fff';
-  ctx.beginPath(); ctx.arc(9, -5, 6, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#2c3e50';
-  ctx.beginPath(); ctx.arc(10, -5, 3.5, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.beginPath(); ctx.arc(11.2, -6.2, 1.2, 0, Math.PI * 2); ctx.fill();
-
-  ctx.fillStyle = '#e74c3c';
+  // === WINGS ===
+  // Top wing
+  const wingY = Math.sin(wingTick) * 2; // gentle flap
+  const wingGrad = ctx.createLinearGradient(0, -BIRD_H, 0, 0);
+  wingGrad.addColorStop(0, '#48aaff');
+  wingGrad.addColorStop(1, '#1a6abf');
+  ctx.fillStyle = wingGrad;
   ctx.beginPath();
-  ctx.moveTo(14, -1); ctx.lineTo(23, 1); ctx.lineTo(14, 4);
-  ctx.closePath(); ctx.fill();
+  ctx.moveTo(4, -3);
+  ctx.lineTo(-10, -BIRD_H / 2 - 6 + wingY);
+  ctx.lineTo(-18, -BIRD_H / 2 - 2 + wingY);
+  ctx.lineTo(-14, -2);
+  ctx.closePath();
+  ctx.fill();
+
+  // Bottom wing
+  ctx.beginPath();
+  ctx.moveTo(4, 3);
+  ctx.lineTo(-10, BIRD_H / 2 + 6 - wingY);
+  ctx.lineTo(-18, BIRD_H / 2 + 2 - wingY);
+  ctx.lineTo(-14, 2);
+  ctx.closePath();
+  ctx.fill();
+
+  // Wing edge highlight
+  ctx.strokeStyle = 'rgba(180,225,255,0.6)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(4, -3);
+  ctx.lineTo(-10, -BIRD_H / 2 - 6 + wingY);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(4, 3);
+  ctx.lineTo(-10, BIRD_H / 2 + 6 - wingY);
+  ctx.stroke();
+
+  // === TAIL FINS ===
+  ctx.fillStyle = '#1a6abf';
+  // Top fin
+  ctx.beginPath();
+  ctx.moveTo(-BIRD_W / 2 + 6, -3);
+  ctx.lineTo(-BIRD_W / 2 - 4, -BIRD_H / 2 + 2);
+  ctx.lineTo(-BIRD_W / 2 + 8, -2);
+  ctx.closePath();
+  ctx.fill();
+  // Bottom fin
+  ctx.beginPath();
+  ctx.moveTo(-BIRD_W / 2 + 6, 3);
+  ctx.lineTo(-BIRD_W / 2 - 4, BIRD_H / 2 - 2);
+  ctx.lineTo(-BIRD_W / 2 + 8, 2);
+  ctx.closePath();
+  ctx.fill();
+
+  // === COCKPIT ===
+  const cpX = BIRD_W / 2 - 14;
+  const cpGrad = ctx.createRadialGradient(cpX - 2, -4, 1, cpX, -2, 9);
+  cpGrad.addColorStop(0, 'rgba(200,240,255,0.95)');
+  cpGrad.addColorStop(0.5, 'rgba(100,200,255,0.7)');
+  cpGrad.addColorStop(1, 'rgba(20,80,160,0.5)');
+  ctx.fillStyle = cpGrad;
+  ctx.beginPath();
+  ctx.ellipse(cpX, 0, 9, 7, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Cockpit rim
+  ctx.strokeStyle = 'rgba(150,210,255,0.8)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.ellipse(cpX, 0, 9, 7, 0.2, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Cockpit reflection
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.beginPath();
+  ctx.ellipse(cpX - 2, -3, 4, 2.5, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // === ENGINE NOZZLE ===
+  const nozzleGrad = ctx.createLinearGradient(-BIRD_W / 2, -5, -BIRD_W / 2 + 6, 5);
+  nozzleGrad.addColorStop(0, '#555');
+  nozzleGrad.addColorStop(1, '#888');
+  ctx.fillStyle = nozzleGrad;
+  ctx.beginPath();
+  ctx.roundRect(-BIRD_W / 2 - 2, -5, 8, 10, 3);
+  ctx.fill();
+
+  // === ACCENT STRIPE ===
+  ctx.strokeStyle = 'rgba(255,200,50,0.7)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(BIRD_W / 2 - 18, -BIRD_H / 2 + 5);
+  ctx.lineTo(-BIRD_W / 2 + 10, -BIRD_H / 2 + 8);
+  ctx.stroke();
 
   ctx.restore();
 }
+
 
 function drawParticlesCanvas() {
   particles.forEach(p => {
@@ -822,7 +942,13 @@ function loop() {
   draw();
   rafId = requestAnimationFrame(loop);
 }
-
+function lightenColor(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, ((n >> 16) & 255) + 60);
+  const g = Math.min(255, ((n >> 8) & 255) + 60);
+  const b = Math.min(255, (n & 255) + 60);
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
 function startGame() {
   cancelAnimationFrame(rafId);
   trailPoints = [];
