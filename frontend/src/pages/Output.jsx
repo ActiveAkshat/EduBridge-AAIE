@@ -16,6 +16,7 @@ import {
   FileText,
 } from "lucide-react";
 import * as api from "../services/api";
+import { QUIZ_TEMPLATE_HTML } from "../components/quiz_game";
 
 // ✅ CHANGE THIS if your template file name is different
 import PDF_TEMPLATE from "../assets/Textbook_Template.png";
@@ -55,6 +56,12 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
   const [isGeneratingFlashcards, setIsGeneratingFlashcards] = useState(false);
   const [flashcardsError, setFlashcardsError] = useState(null);
 
+  //Quiz States
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [quizData, setQuizData] = useState(null);
+  const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+  const [quizError, setQuizError] = useState(null);
+
   // Concept cards view state
   const [showConceptCards, setShowConceptCards] = useState(false);
 
@@ -62,6 +69,12 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
   const [isDownloadingNotes, setIsDownloadingNotes] = useState(false);
   const [isDownloadingMindmap, setIsDownloadingMindmap] = useState(false);
   const [isDownloadingChapter, setIsDownloadingChapter] = useState(false);
+
+  // Image states
+  const [showImages, setShowImages] = useState(false);
+  const [imagesData, setImagesData] = useState(null);
+  const [isGeneratingImages, setIsGeneratingImages] = useState(false);
+  const [imagesError, setImagesError] = useState(null);
 
   useEffect(() => {
     if (topics.length > 0 && !isProcessing) {
@@ -386,6 +399,40 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
     setFlashcardsError(null);
   };
 
+  // Quiz generate
+  const generateQuiz = async () => {
+    if (!selectedTopic) return;
+
+    setIsGeneratingQuiz(true);
+    setQuizError(null);
+    setShowQuiz(true);
+
+    try {
+      const contentForQuiz =
+        selectedLanguage === "hindi" && selectedTopic.content_hindi
+          ? selectedTopic.content_hindi
+          : selectedTopic.content;
+
+      const response = await api.generateQuiz(
+        selectedTopic.topic,
+        contentForQuiz
+      );
+      console.log("Quiz API response:", response?.data?.data);
+      setQuizData(response?.data?.data);
+    } catch (err) {
+      setQuizError(
+        err.response?.data?.message || err.message || "Failed to generate quiz"
+      );
+    } finally {
+      setIsGeneratingQuiz(false);
+    }
+  };
+
+  const closeQuiz = () => {
+    setShowQuiz(false);
+    setQuizData(null);
+    setQuizError(null);
+  };
   // Helpers
   const getTemplateDataUrl = async () => {
     const res = await fetch(PDF_TEMPLATE);
@@ -482,7 +529,33 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
       setIsDownloadingMindmap(false);
     }
   };
+  //Image Generation
+  const generateImages = async () => {
+    if (!selectedTopic) return;
+    setIsGeneratingImages(true);
+    setImagesError(null);
+    setShowImages(true);
 
+    try {
+      const content =
+        selectedLanguage === "hindi" && selectedTopic.content_hindi
+          ? selectedTopic.content_hindi
+          : selectedTopic.content;
+
+      const response = await api.generateImages({ text: content });
+      setImagesData(response.data.data.images);
+    } catch (err) {
+      setImagesError(err.response?.data?.message || err.message || "Failed to generate images");
+    } finally {
+      setIsGeneratingImages(false);
+    }
+  };
+
+  const closeImages = () => {
+    setShowImages(false);
+    setImagesData(null);
+    setImagesError(null);
+  };
   // ✅ NEW: Download Entire Chapter PDF
   const handleDownloadChapterPDF = async () => {
     if (!simplifiedTopics || simplifiedTopics.length === 0) return;
@@ -551,9 +624,8 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
           <button
             onClick={handleDownloadChapterPDF}
             disabled={isDownloadingChapter || isSimplifying || isTranslating}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-              isDownloadingChapter ? "bg-green-700/50 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"
-            } text-white`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${isDownloadingChapter ? "bg-green-700/50 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"
+              } text-white`}
             title="Download Entire Chapter PDF"
           >
             {isDownloadingChapter ? <Loader size={16} className="animate-spin" /> : <FileText size={16} />}
@@ -579,11 +651,10 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
                   <button
                     key={index}
                     onClick={() => handleTopicClick(topic)}
-                    className={`w-full text-left px-4 py-3 rounded-lg transition-all duration-200 ${
-                      selectedTopic && selectedTopic.topic === topic.topic
-                        ? "bg-blue-600 text-white shadow-lg"
-                        : "bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white"
-                    }`}
+                    className={`w-full text-left px-4 py-3 rounded-lg transition-all duration-200 ${selectedTopic && selectedTopic.topic === topic.topic
+                      ? "bg-blue-600 text-white shadow-lg"
+                      : "bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white"
+                      }`}
                   >
                     <span className="font-medium text-sm leading-tight block">{topic.topic || `Topic ${index + 1}`}</span>
                     {selectedLanguage === "hindi" && displayTopic.topic_hindi && (
@@ -629,9 +700,8 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
                   <button
                     onClick={handleDownloadNotesPDF}
                     disabled={isDownloadingNotes}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-                      isDownloadingNotes ? "bg-blue-600/50 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
-                    } text-white`}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${isDownloadingNotes ? "bg-blue-600/50 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+                      } text-white`}
                     title="Download Notes PDF"
                   >
                     {isDownloadingNotes ? <Loader size={16} className="animate-spin" /> : <Download size={16} />}
@@ -688,9 +758,8 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
                           <button
                             onClick={handleGenerateAudio}
                             disabled={isGeneratingAudio}
-                            className={`w-full flex items-center justify-center gap-3 px-6 py-4 rounded-lg font-medium transition-all ${
-                              isGeneratingAudio ? "bg-blue-600/50 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
-                            } text-white`}
+                            className={`w-full flex items-center justify-center gap-3 px-6 py-4 rounded-lg font-medium transition-all ${isGeneratingAudio ? "bg-blue-600/50 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+                              } text-white`}
                           >
                             {isGeneratingAudio ? (
                               <>
@@ -747,11 +816,10 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
               <button
                 onClick={generateMindmap}
                 disabled={!selectedTopic || isSimplifying || isTranslating}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
-                  selectedTopic && !isSimplifying && !isTranslating
-                    ? "bg-purple-600 hover:bg-purple-700 text-white"
-                    : "bg-gray-700 text-gray-500 cursor-not-allowed"
-                }`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${selectedTopic && !isSimplifying && !isTranslating
+                  ? "bg-purple-600 hover:bg-purple-700 text-white"
+                  : "bg-gray-700 text-gray-500 cursor-not-allowed"
+                  }`}
               >
                 <span className="text-2xl">🗺️</span>
                 <span className="font-medium">Mind Map</span>
@@ -760,14 +828,35 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
               <button
                 onClick={generateFlashcards}
                 disabled={!selectedTopic || isSimplifying || isTranslating}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
-                  selectedTopic && !isSimplifying && !isTranslating
-                    ? "bg-green-600 hover:bg-green-700 text-white"
-                    : "bg-gray-700 text-gray-500 cursor-not-allowed"
-                }`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${selectedTopic && !isSimplifying && !isTranslating
+                  ? "bg-green-600 hover:bg-green-700 text-white"
+                  : "bg-gray-700 text-gray-500 cursor-not-allowed"
+                  }`}
               >
                 <span className="text-2xl">🗂️</span>
                 <span className="font-medium">Flashcards</span>
+              </button>
+              <button
+                onClick={generateQuiz}
+                disabled={!selectedTopic || isSimplifying || isTranslating}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${selectedTopic && !isSimplifying && !isTranslating
+                  ? "bg-yellow-600 hover:bg-yellow-700 text-white"
+                  : "bg-gray-700 text-gray-500 cursor-not-allowed"
+                  }`}
+              >
+                <span className="text-2xl">🎮</span>
+                <span className="font-medium">Quiz</span>
+              </button>
+              <button
+                onClick={generateImages}
+                disabled={!selectedTopic || isSimplifying || isTranslating}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${selectedTopic && !isSimplifying && !isTranslating
+                  ? "bg-pink-600 hover:bg-pink-700 text-white"
+                  : "bg-gray-700 text-gray-500 cursor-not-allowed"
+                  }`}
+              >
+                <span className="text-2xl">🖼️</span>
+                <span className="font-medium">Concept Images</span>
               </button>
             </div>
           </aside>
@@ -793,18 +882,16 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
               <div className="flex gap-2 px-4 pt-4 border-b border-gray-700">
                 <button
                   onClick={() => setShowConceptCards(false)}
-                  className={`px-4 py-2 rounded-t-lg transition ${
-                    !showConceptCards ? "bg-gray-700 text-white" : "bg-gray-900 text-gray-400 hover:text-white"
-                  }`}
+                  className={`px-4 py-2 rounded-t-lg transition ${!showConceptCards ? "bg-gray-700 text-white" : "bg-gray-900 text-gray-400 hover:text-white"
+                    }`}
                 >
                   Mind Map View
                 </button>
 
                 <button
                   onClick={() => setShowConceptCards(true)}
-                  className={`px-4 py-2 rounded-t-lg transition ${
-                    showConceptCards ? "bg-gray-700 text-white" : "bg-gray-900 text-gray-400 hover:text-white"
-                  }`}
+                  className={`px-4 py-2 rounded-t-lg transition ${showConceptCards ? "bg-gray-700 text-white" : "bg-gray-900 text-gray-400 hover:text-white"
+                    }`}
                 >
                   📚 Concept Cards
                 </button>
@@ -812,9 +899,8 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
                 <button
                   onClick={handleDownloadMindmapPDF}
                   disabled={isDownloadingMindmap}
-                  className={`px-4 py-2 rounded-t-lg transition flex items-center gap-2 ${
-                    isDownloadingMindmap ? "bg-purple-700/50 text-white cursor-not-allowed" : "bg-purple-600 hover:bg-purple-700 text-white"
-                  }`}
+                  className={`px-4 py-2 rounded-t-lg transition flex items-center gap-2 ${isDownloadingMindmap ? "bg-purple-700/50 text-white cursor-not-allowed" : "bg-purple-600 hover:bg-purple-700 text-white"
+                    }`}
                 >
                   {isDownloadingMindmap ? <Loader size={16} className="animate-spin" /> : <Download size={16} />}
                   Download PDF
@@ -862,6 +948,97 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
           onRetry={generateFlashcards}
         />
       )}
+      {/* Quiz Modal */}
+      {showQuiz && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center">
+          <div className="w-full h-full bg-black relative">
+
+            <button
+              onClick={closeQuiz}
+              className="absolute top-4 right-6 text-white text-2xl z-50"
+            >
+              ✖
+            </button>
+
+            {isGeneratingQuiz ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader size={50} className="animate-spin text-yellow-500" />
+              </div>
+            ) : quizError ? (
+              <div className="flex items-center justify-center h-full text-red-400">
+                {quizError}
+              </div>
+            ) : quizData ? (
+              <iframe
+                title="Quiz Game"
+                className="w-full h-full"
+                srcDoc={generateQuizHTML(quizData)}
+              />
+            ) : null}
+          </div>
+        </div>
+      )}
+      {/* Images Modal */}
+      {showImages && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
+          <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <span className="text-2xl">🖼️</span>
+                Concept Visuals: {selectedTopic?.topic}
+              </h3>
+              <button onClick={closeImages} className="p-2 hover:bg-gray-700 rounded-lg transition">
+                <X size={24} className="text-gray-400" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-6">
+              {isGeneratingImages ? (
+                <div className="flex flex-col items-center justify-center h-64 space-y-4">
+                  <Loader size={48} className="animate-spin text-pink-500" />
+                  <p className="text-gray-300 text-lg">Generating concept visuals...</p>
+                  <p className="text-gray-500 text-sm">Creating image prompts and illustrations</p>
+                </div>
+              ) : imagesError ? (
+                <div className="flex flex-col items-center justify-center h-64 space-y-4">
+                  <div className="bg-red-900/20 border border-red-500 rounded-lg p-6 max-w-md">
+                    <p className="text-red-300 text-center mb-4">{imagesError}</p>
+                    <button
+                      onClick={generateImages}
+                      className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                </div>
+              ) : imagesData && imagesData.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {imagesData.map((img, idx) => (
+                    <div key={idx} className="bg-gray-700 rounded-xl overflow-hidden shadow-lg">
+                      {img.error ? (
+                        <div className="h-48 flex items-center justify-center bg-gray-600">
+                          <p className="text-gray-400 text-sm text-center px-4">❌ Could not generate this image</p>
+                        </div>
+                      ) : (
+                        <img
+                          src={img.image_b64 ? `data:image/png;base64,${img.image_b64}` : img.image_url}
+                          alt={img.title}
+                          className="w-full h-48 object-cover"
+                        />
+                      )}
+                      <div className="p-4">
+                        <h4 className="text-white font-semibold mb-1">{img.title}</h4>
+                        <p className="text-gray-400 text-sm">{img.caption}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -902,7 +1079,50 @@ const ConceptCardsView = ({ nodes }) => {
     </div>
   );
 };
+//Quiz Generator
+const generateQuizHTML = (quizJson) => {
+  console.log("generateQuizHTML received:", quizJson);
 
+  if (!quizJson || !quizJson.questions || quizJson.questions.length === 0) {
+    console.warn("No quiz data provided, using default template");
+    return QUIZ_TEMPLATE_HTML;
+  }
+
+  const formattedData = quizJson.questions.map((q) => ({
+    question: q.question,
+    options: q.options,
+    correct: q.correct_index
+  }));
+
+  console.log("Formatted quiz data for injection:", formattedData);
+
+  // Create the quiz data assignment as a string
+  const quizDataAssignment = `const QUIZ_DATA = ${JSON.stringify(formattedData)};`;
+
+  // Replace everything between the markers with the new quiz data
+  const markerStart = "// <<<QUIZ_DATA_PLACEHOLDER_START>>>";
+  const markerEnd = "// <<<QUIZ_DATA_PLACEHOLDER_END>>>";
+
+  // Find the positions of both markers
+  const startIndex = QUIZ_TEMPLATE_HTML.indexOf(markerStart);
+  const endIndex = QUIZ_TEMPLATE_HTML.indexOf(markerEnd);
+
+  if (startIndex === -1 || endIndex === -1) {
+    console.error("Markers not found in template");
+    return QUIZ_TEMPLATE_HTML;
+  }
+
+  // Replace the entire block between markers with just the new data
+  const modifiedHtml =
+    QUIZ_TEMPLATE_HTML.substring(0, startIndex + markerStart.length) +
+    "\n" + quizDataAssignment + "\n" +
+    QUIZ_TEMPLATE_HTML.substring(endIndex);
+
+  console.log("Modified HTML length:", modifiedHtml.length);
+  console.log("QUIZ_DATA substitution successful");
+
+  return modifiedHtml;
+};
 // Mindmap Renderer
 const MindmapRenderer = ({ data }) => {
   const [hoveredNode, setHoveredNode] = useState(null);
@@ -1161,11 +1381,10 @@ const FlashcardModal = ({ flashcards, isLoading, error, topicName, onClose, onRe
           <button
             onClick={handlePrevious}
             disabled={currentIndex === 0}
-            className={`p-3 rounded-full transition ${
-              currentIndex === 0
-                ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
-                : 'bg-gray-700 hover:bg-gray-600 text-white'
-            }`}
+            className={`p-3 rounded-full transition ${currentIndex === 0
+              ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+              : 'bg-gray-700 hover:bg-gray-600 text-white'
+              }`}
           >
             <ChevronLeft size={24} />
           </button>
@@ -1177,11 +1396,10 @@ const FlashcardModal = ({ flashcards, isLoading, error, topicName, onClose, onRe
           <button
             onClick={handleNext}
             disabled={currentIndex === totalCards - 1}
-            className={`p-3 rounded-full transition ${
-              currentIndex === totalCards - 1
-                ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
-            }`}
+            className={`p-3 rounded-full transition ${currentIndex === totalCards - 1
+              ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+              : 'bg-blue-600 hover:bg-blue-700 text-white'
+              }`}
           >
             <ChevronRight size={24} />
           </button>

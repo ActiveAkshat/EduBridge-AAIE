@@ -8,6 +8,8 @@ from routes.mindmap_routes import mindmap_bp
 from routes.translation_routes import translation_bp
 from routes.audio_routes import audio_bp
 from routes.export_routes import export_bp
+from routes.quiz_routes import quiz_bp
+from routes.image_routes import image_bp
 import os
 from dotenv import load_dotenv
 
@@ -31,6 +33,8 @@ app.register_blueprint(mindmap_bp)
 app.register_blueprint(translation_bp)
 app.register_blueprint(audio_bp)
 app.register_blueprint(export_bp)
+app.register_blueprint(quiz_bp)
+app.register_blueprint(image_bp)
 
 os.makedirs("uploads", exist_ok=True)
 
