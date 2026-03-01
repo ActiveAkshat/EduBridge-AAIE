@@ -36,7 +36,7 @@ export const QUIZ_TEMPLATE_HTML = `
 </style>
 </head>
 <body>
-<canvas id="gameCanvas" width="820" height="500"></canvas>
+<canvas id="gameCanvas" width="820" height="520"></canvas>
 <p id="hint">↑ ↓ or W S — hold to move up/down &nbsp;|&nbsp; release to stay in place</p>
 
 <script>
@@ -64,27 +64,35 @@ const QUIZ_DATA = [
 const canvas = document.getElementById('gameCanvas');
 const ctx    = canvas.getContext('2d');
 const W = canvas.width;   // 820
-const H = canvas.height;  // 500
+const H = canvas.height;  // 520
 
-// Layout zones
-const Q_BOX_X  = 30;          // question box left
-const Q_BOX_Y  = 18;
+// Layout zones — question box height is now DYNAMIC
+const Q_BOX_X  = 30;
+const Q_BOX_Y  = 14;
 const Q_BOX_W  = W - 80;
-const Q_BOX_H  = 70;
+const Q_FONT_SIZE = 17;
+const Q_LINE_H    = 24;
+const Q_PAD_V     = 22;   // vertical padding inside question box
+const Q_PAD_LEFT  = 60;   // space for Q badge
+const Q_TEXT_MAX  = Q_BOX_W - Q_PAD_LEFT - 14;
 
-const GAME_TOP  = Q_BOX_Y + Q_BOX_H + 18;  // where gameplay area starts (~106)
-const GAME_H    = H - GAME_TOP - 30;        // playable height (~364)
-const GROUND_Y  = GAME_TOP + GAME_H;        // ground line
+// Minimum / max question box height
+const Q_BOX_H_MIN = 58;
+const Q_BOX_H_MAX = 130;
 
 // Answer boxes — 4 boxes stacked vertically on the RIGHT side
 const BOX_COUNT  = 4;
-const BOX_W      = 170;
-const BOX_H      = GAME_H / BOX_COUNT - 8;  // ~83px each with gaps
-const BOX_RIGHT  = W - 20;
-const BOX_X      = BOX_RIGHT - BOX_W;
+const BOX_W      = 185;
 
-function boxY(lane) {
-  return GAME_TOP + lane * (GAME_H / BOX_COUNT) + 4;
+// Computed each frame based on dynamic Q_BOX_H
+function getLayout(qBoxH) {
+  const gameTop  = Q_BOX_Y + qBoxH + 14;
+  const gameH    = H - gameTop - 28;
+  const groundY  = gameTop + gameH;
+  const boxRight = W - 16;
+  const boxX     = boxRight - BOX_W;
+  const boxH     = gameH / BOX_COUNT - 8;
+  return { gameTop, gameH, groundY, boxX, boxH };
 }
 
 // Bird
@@ -92,22 +100,64 @@ const BIRD_START_X = 80;
 const BIRD_W       = 38;
 const BIRD_H       = 30;
 
-// Physics — bird moves RIGHT automatically, player controls Y
-const BIRD_SPEED   = 3.2;     // constant horizontal speed
-const MOVE_SPEED   = 5.0;     // how fast bird moves up/down when key held
-const GRAVITY      = 0;       // NO gravity — bird stays put
-const BOOST_FORCE  = 0;       // unused
-const MAX_VY       = 0;       // unused
+// Physics — SLOW bird speed
+const BIRD_SPEED   = 1.2;   // ← was 3.2, now much slower
+const MOVE_SPEED   = 5.0;
+const GRAVITY      = 0;
 
 // Colors
 const LANE_COLORS  = ['#e74c3c', '#f39c12', '#2ecc71', '#3498db'];
 const LANE_LABELS  = ['A', 'B', 'C', 'D'];
 
 // ═══════════════════════════════════════
+// HELPERS — text wrapping (no canvas side effects)
+// ═══════════════════════════════════════
+function measureWrappedLines(text, maxW, font) {
+  ctx.save();
+  ctx.font = font;
+  const words = text.split(' ');
+  const lines = [];
+  let line = '';
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
+    else line = test;
+  }
+  lines.push(line);
+  ctx.restore();
+  return lines;
+}
+
+function computeQBoxH(question) {
+  const font = "bold " + Q_FONT_SIZE + "px 'Nunito', sans-serif";
+  const lines = measureWrappedLines(question, Q_TEXT_MAX, font);
+  const h = Q_PAD_V * 2 + lines.length * Q_LINE_H;
+  return Math.min(Q_BOX_H_MAX, Math.max(Q_BOX_H_MIN, h));
+}
+
+function wrapText(ctx, text, x, y, maxW, lineH) {
+  const words = text.split(' ');
+  let line = '';
+  const lines = [];
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
+    else line = test;
+  }
+  lines.push(line);
+  const startY = y - ((lines.length - 1) * lineH) / 2;
+  lines.forEach((l, i) => ctx.fillText(l, x, startY + i * lineH));
+}
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255);
+}
+
+// ═══════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════
 let phase = 'menu';
-
 let bird, stars, particles;
 let score, lives, streak, questionIdx;
 let correctCount, wrongCount;
@@ -115,13 +165,17 @@ let bgOffset;
 let flashColor, flashTimer;
 let streakMsg, streakMsgTimer;
 let resultPhase, resultTimer, resultCorrect, resultQ;
-let questionX; // question box scroll-in animation
-let boxesX;    // answer boxes slide-in from right
+let questionX;
+let boxesX;
+let currentQBoxH = Q_BOX_H_MIN;  // dynamic question box height
 
 function initGame() {
+  currentQBoxH = computeQBoxH(QUIZ_DATA[0].question);
+  const { gameTop, gameH } = getLayout(currentQBoxH);
+
   bird = {
     x:        BIRD_START_X,
-    y:        GAME_TOP + GAME_H / 2 - BIRD_H / 2,
+    y:        gameTop + gameH / 2 - BIRD_H / 2,
     vy:       0,
     flap:     0,
     rotation: 0,
@@ -141,8 +195,8 @@ function initGame() {
   streakMsgTimer = 0;
   resultPhase  = false;
   resultTimer  = 0;
-  questionX    = -Q_BOX_W;   // slides in from left
-  boxesX       = W + 20;     // slides in from right
+  questionX    = -Q_BOX_W;
+  boxesX       = W + 20;
 
   stars = Array.from({ length: 70 }, () => ({
     x: Math.random() * W,
@@ -150,7 +204,6 @@ function initGame() {
     r: Math.random() * 1.3 + 0.2,
     s: Math.random() * 0.5 + 0.1,
   }));
-
   particles = [];
 }
 
@@ -209,10 +262,10 @@ function checkAnswer(lane) {
 // UPDATE
 // ═══════════════════════════════════════
 function update() {
-
   // Slide-in animations
   if (questionX < Q_BOX_X) questionX = Math.min(Q_BOX_X, questionX + 22);
-  if (boxesX > BOX_X)      boxesX    = Math.max(BOX_X,   boxesX    - 22);
+  const layout = getLayout(currentQBoxH);
+  if (boxesX > layout.boxX) boxesX = Math.max(layout.boxX, boxesX - 22);
 
   if (resultPhase) {
     updateParticles();
@@ -224,9 +277,11 @@ function update() {
         phase = 'ended';
         return;
       }
-      // Next question — reset bird, slide in fresh
+      // Next question — recalculate box height, reset bird
+      currentQBoxH = computeQBoxH(QUIZ_DATA[questionIdx].question);
+      const nl = getLayout(currentQBoxH);
       bird.x        = BIRD_START_X;
-      bird.y        = GAME_TOP + GAME_H / 2 - BIRD_H / 2;
+      bird.y        = nl.gameTop + nl.gameH / 2 - BIRD_H / 2;
       bird.vy       = 0;
       bird.answered = false;
       questionX     = -Q_BOX_W;
@@ -239,42 +294,45 @@ function update() {
 
   bgOffset++;
 
-  // Bird moves RIGHT automatically
+  // Bird moves RIGHT automatically (slow)
   bird.x += BIRD_SPEED;
 
-  // Vertical — NO gravity, bird only moves when keys held
+  // Vertical — NO gravity
   bird.y        += bird.vy;
   bird.rotation  = Math.min(Math.max(bird.vy * 4, -22), 22);
 
-  // Clamp to play area (soft boundary, no penalty)
-  if (bird.y < GAME_TOP)              bird.y = GAME_TOP;
-  if (bird.y + BIRD_H > GROUND_Y)     bird.y = GROUND_Y - BIRD_H;
+  // Clamp to play area
+  const { gameTop, gameH, groundY } = layout;
+  if (bird.y < gameTop)              bird.y = gameTop;
+  if (bird.y + BIRD_H > groundY)     bird.y = groundY - BIRD_H;
 
   // Stars scroll
   stars.forEach(s => { s.x -= s.s; if (s.x < 0) s.x = W; });
 
-  // ── Collision with answer boxes ──
+  // Collision with answer boxes
   if (!bird.answered && bird.x + BIRD_W >= boxesX && bird.x <= boxesX + BOX_W) {
     const birdCY = bird.y + BIRD_H / 2;
     for (let lane = 0; lane < BOX_COUNT; lane++) {
-      const by = boxY(lane);
-      if (birdCY >= by && birdCY <= by + BOX_H) {
+      const by = boxYFn(lane, layout);
+      if (birdCY >= by && birdCY <= by + layout.boxH) {
         checkAnswer(lane);
         break;
       }
     }
   }
 
-  // Bird flew past boxes without hitting one (shouldn't happen often but safeguard)
+  // Bird flew past boxes without hitting one
   if (!bird.answered && bird.x > W + 20) {
-    // Treat as wrong — missed
-    const q = QUIZ_DATA[questionIdx];
-    checkAnswer(-1); // -1 = missed, always wrong
+    checkAnswer(-1);
   }
 
   if (flashTimer > 0) flashTimer--; else flashColor = null;
   if (streakMsgTimer > 0) streakMsgTimer--; else streakMsg = null;
   updateParticles();
+}
+
+function boxYFn(lane, layout) {
+  return layout.gameTop + lane * (layout.gameH / BOX_COUNT) + 4;
 }
 
 function updateParticles() {
@@ -291,6 +349,8 @@ function updateParticles() {
 // DRAW
 // ═══════════════════════════════════════
 function draw() {
+  const layout = getLayout(currentQBoxH);
+
   // BG
   const bg = ctx.createLinearGradient(0, 0, 0, H);
   bg.addColorStop(0, '#0a0a1a');
@@ -299,11 +359,11 @@ function draw() {
   ctx.fillRect(0, 0, W, H);
 
   drawStars();
-  drawGround();
+  drawGround(layout);
 
   if (phase === 'playing' || resultPhase) {
-    drawQuestionBox();
-    drawAnswerBoxes();
+    drawQuestionBox(layout);
+    drawAnswerBoxes(layout);
     drawBird();
     drawTrail();
   }
@@ -316,7 +376,7 @@ function draw() {
     ctx.fillRect(0, 0, W, H);
   }
 
-  if (resultPhase) drawResultBanner();
+  if (resultPhase) drawResultBanner(layout);
 
   if (streakMsg && streakMsgTimer > 0) {
     ctx.save();
@@ -327,7 +387,7 @@ function draw() {
     ctx.fillStyle    = '#f1c40f';
     ctx.shadowColor  = '#c0392b';
     ctx.shadowBlur   = 10;
-    ctx.fillText(streakMsg, W / 2, GAME_TOP + 36);
+    ctx.fillText(streakMsg, W / 2, layout.gameTop + 36);
     ctx.restore();
   }
 
@@ -337,7 +397,6 @@ function draw() {
   if (phase === 'ended') drawEnd();
 }
 
-// ── Stars ────────────────────────────────────────
 function drawStars() {
   stars.forEach(s => {
     ctx.beginPath();
@@ -347,35 +406,31 @@ function drawStars() {
   });
 }
 
-// ── Ground ───────────────────────────────────────
-function drawGround() {
+function drawGround(layout) {
   ctx.fillStyle = '#0d2b1a';
-  ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
+  ctx.fillRect(0, layout.groundY, W, H - layout.groundY);
   ctx.fillStyle = '#27ae60';
-  ctx.fillRect(0, GROUND_Y, W, 3);
-  // scrolling dashes
+  ctx.fillRect(0, layout.groundY, W, 3);
   ctx.fillStyle = 'rgba(0,0,0,0.2)';
   for (let i = 0; i < 24; i++) {
     const gx = ((bgOffset * 2.8 + i * 48) % (W + 48)) - 48;
-    ctx.fillRect(gx, GROUND_Y + 3, 22, H - GROUND_Y - 3);
+    ctx.fillRect(gx, layout.groundY + 3, 22, H - layout.groundY - 3);
   }
 }
 
-// ── Question box (top, slides in from left) ───────
-function drawQuestionBox() {
+// ── Question box — height adjusts to question length ──
+function drawQuestionBox(layout) {
   const q = QUIZ_DATA[Math.min(questionIdx, QUIZ_DATA.length - 1)];
+  const qh = currentQBoxH;
 
-  // Glow
   ctx.shadowColor = 'rgba(245,166,35,0.35)';
   ctx.shadowBlur  = 18;
 
-  // Box background
   ctx.fillStyle = 'rgba(245,166,35,0.12)';
   ctx.beginPath();
-  ctx.roundRect(questionX, Q_BOX_Y, Q_BOX_W, Q_BOX_H, 16);
+  ctx.roundRect(questionX, Q_BOX_Y, Q_BOX_W, qh, 16);
   ctx.fill();
 
-  // Border
   const borderGrad = ctx.createLinearGradient(questionX, 0, questionX + Q_BOX_W, 0);
   borderGrad.addColorStop(0,   '#f5a623');
   borderGrad.addColorStop(0.5, '#e74c3c');
@@ -383,115 +438,131 @@ function drawQuestionBox() {
   ctx.strokeStyle = borderGrad;
   ctx.lineWidth   = 2.5;
   ctx.beginPath();
-  ctx.roundRect(questionX, Q_BOX_Y, Q_BOX_W, Q_BOX_H, 16);
+  ctx.roundRect(questionX, Q_BOX_Y, Q_BOX_W, qh, 16);
   ctx.stroke();
   ctx.shadowBlur = 0;
 
   // Q number badge
+  const badgeR = 18;
+  const badgeCX = questionX + 28;
+  const badgeCY = Q_BOX_Y + qh / 2;
   ctx.fillStyle = '#f5a623';
   ctx.beginPath();
-  ctx.arc(questionX + 28, Q_BOX_Y + Q_BOX_H / 2, 18, 0, Math.PI * 2);
+  ctx.arc(badgeCX, badgeCY, badgeR, 0, Math.PI * 2);
   ctx.fill();
   ctx.font         = "bold 15px 'Bangers', cursive";
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle    = '#1a1a2e';
-  ctx.fillText('Q' + (questionIdx + 1) + ' ', questionX + 28, Q_BOX_Y + Q_BOX_H / 2);
+  ctx.fillText('Q' + (questionIdx + 1), badgeCX, badgeCY);
 
-  // Question text
-  ctx.font         = "bold 18px 'Nunito', sans-serif";
+  // Question text — wrapped, vertically centered
+  ctx.font         = "bold " + Q_FONT_SIZE + "px 'Nunito', sans-serif";
   ctx.textAlign    = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillStyle    = '#fff';
-  ctx.fillText(q.question, questionX + 56, Q_BOX_Y + Q_BOX_H / 2);
+
+  const font = "bold " + Q_FONT_SIZE + "px 'Nunito', sans-serif";
+  const lines = measureWrappedLines(q.question, Q_TEXT_MAX, font);
+  const totalTextH = lines.length * Q_LINE_H;
+  let ty = Q_BOX_Y + qh / 2 - (totalTextH - Q_LINE_H) / 2;
+  ctx.font = font;
+  lines.forEach((line, i) => {
+    ctx.fillText(line, questionX + Q_PAD_LEFT, ty + i * Q_LINE_H);
+  });
 }
 
-// ── Answer boxes (RIGHT side, stacked vertically) ─
-function drawAnswerBoxes() {
+// ── Answer boxes — use dynamic layout ──
+function drawAnswerBoxes(layout) {
   const q = QUIZ_DATA[Math.min(questionIdx, QUIZ_DATA.length - 1)];
+  const { boxH, boxX } = layout;
+
+  // Compute option text max width for wrapping
+  const optMaxW = BOX_W - 52;
 
   for (let lane = 0; lane < BOX_COUNT; lane++) {
     const bx    = boxesX;
-    const by    = boxY(lane);
+    const by    = boxYFn(lane, layout);
     const color = LANE_COLORS[lane];
     const label = LANE_LABELS[lane];
     const opt   = q.options[lane];
     const isCorrect = lane === q.correct;
 
-    // Glow on hover (when bird is near this lane)
     const birdCY   = bird.y + BIRD_H / 2;
-    const boxCY    = by + BOX_H / 2;
-    const proximity = Math.max(0, 1 - Math.abs(birdCY - boxCY) / (GAME_H / 2));
+    const boxCY    = by + boxH / 2;
+    const proximity = Math.max(0, 1 - Math.abs(birdCY - boxCY) / (layout.gameH / 2));
     const glowAmt  = proximity * 0.5;
 
     ctx.shadowColor = color;
     ctx.shadowBlur  = 8 + glowAmt * 20;
 
-    // Box bg
     ctx.fillStyle = 'rgba(' + hexToRgb(color) + ', ' + (0.12 + glowAmt * 0.15) + ')';
     ctx.beginPath();
-    ctx.roundRect(bx, by, BOX_W, BOX_H, 12);
+    ctx.roundRect(bx, by, BOX_W, boxH, 12);
     ctx.fill();
 
-    // Box border
     ctx.strokeStyle = color;
     ctx.lineWidth   = 2 + glowAmt * 1.5;
     ctx.beginPath();
-    ctx.roundRect(bx, by, BOX_W, BOX_H, 12);
+    ctx.roundRect(bx, by, BOX_W, boxH, 12);
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    // Letter badge (left side of box)
+    // Letter badge
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(bx + 22, by + BOX_H / 2, 16, 0, Math.PI * 2);
+    ctx.arc(bx + 22, by + boxH / 2, 16, 0, Math.PI * 2);
     ctx.fill();
     ctx.font         = "bold 16px 'Bangers', cursive";
     ctx.textAlign    = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle    = '#fff';
-    ctx.fillText(label, bx + 22, by + BOX_H / 2);
+    ctx.fillText(label, bx + 22, by + boxH / 2);
 
-    // Option text
-    ctx.font         = "bold 13px 'Nunito', sans-serif";
+    // Option text — wrapped, vertically centered
+    const optFont = "bold 13px 'Nunito', sans-serif";
+    const optLines = measureWrappedLines(opt, optMaxW, optFont);
+    const optTotalH = optLines.length * 17;
+    ctx.font = optFont;
     ctx.textAlign    = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillStyle    = '#fff';
-    // Word wrap within box
-    wrapText(ctx, opt, bx + 44, by + BOX_H / 2, BOX_W - 52, 16);
+    let oty = by + boxH / 2 - (optTotalH - 17) / 2;
+    optLines.forEach((line, i) => {
+      ctx.fillText(line, bx + 44, oty + i * 17);
+    });
 
     // Show correct indicator during result phase
     if (resultPhase && isCorrect) {
       ctx.fillStyle = 'rgba(46,204,113,0.25)';
       ctx.beginPath();
-      ctx.roundRect(bx, by, BOX_W, BOX_H, 12);
+      ctx.roundRect(bx, by, BOX_W, boxH, 12);
       ctx.fill();
       ctx.strokeStyle = '#2ecc71';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.roundRect(bx, by, BOX_W, BOX_H, 12);
+      ctx.roundRect(bx, by, BOX_W, boxH, 12);
       ctx.stroke();
     }
   }
 
-  // Connecting line from question box to answer boxes (like a speech bubble tail)
+  // Dashed connecting line
   if (questionX >= Q_BOX_X - 5) {
     const lineAlpha = Math.min(1, (questionX - Q_BOX_X + 5) / 20) * 0.3;
     ctx.strokeStyle = 'rgba(245, 166, 35, ' + lineAlpha + ')';
     ctx.lineWidth   = 1.5;
     ctx.setLineDash([6, 8]);
     ctx.beginPath();
-    ctx.moveTo(Q_BOX_X + Q_BOX_W, Q_BOX_Y + Q_BOX_H / 2);
-    ctx.lineTo(boxesX, GAME_TOP + GAME_H / 2);
+    ctx.moveTo(Q_BOX_X + Q_BOX_W, Q_BOX_Y + currentQBoxH / 2);
+    ctx.lineTo(boxesX, layout.gameTop + layout.gameH / 2);
     ctx.stroke();
     ctx.setLineDash([]);
   }
 }
 
-// ── Bird ─────────────────────────────────────────
+// ── Bird ──
 let trailPoints = [];
 function drawTrail() {
-  // Store trail
   trailPoints.push({ x: bird.x + BIRD_W / 2, y: bird.y + BIRD_H / 2, t: 1 });
   if (trailPoints.length > 18) trailPoints.shift();
   trailPoints.forEach((p, i) => {
@@ -512,11 +583,9 @@ function drawBird() {
   ctx.translate(bx + BIRD_W / 2, by + BIRD_H / 2);
   ctx.rotate((bird.rotation * Math.PI) / 180);
 
-  // Body glow
   ctx.shadowColor = 'rgba(245,166,35,0.6)';
   ctx.shadowBlur  = 14;
 
-  // Body
   const bg = ctx.createRadialGradient(-3, -4, 2, 0, 0, BIRD_W / 2);
   bg.addColorStop(0, '#ffe082');
   bg.addColorStop(1, '#f5a623');
@@ -526,13 +595,11 @@ function drawBird() {
   ctx.fill();
   ctx.shadowBlur = 0;
 
-  // Wing
   ctx.fillStyle = '#e67e22';
   ctx.beginPath();
   ctx.ellipse(-3, bird.flap > 0 ? -9 : 5, 10, 6, -0.3, 0, Math.PI * 2);
   ctx.fill();
 
-  // Eye
   ctx.fillStyle = '#fff';
   ctx.beginPath(); ctx.arc(9, -5, 6, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#2c3e50';
@@ -540,7 +607,6 @@ function drawBird() {
   ctx.fillStyle = '#fff';
   ctx.beginPath(); ctx.arc(11.2, -6.2, 1.2, 0, Math.PI * 2); ctx.fill();
 
-  // Beak
   ctx.fillStyle = '#e74c3c';
   ctx.beginPath();
   ctx.moveTo(14, -1); ctx.lineTo(23, 1); ctx.lineTo(14, 4);
@@ -560,9 +626,8 @@ function drawParticlesCanvas() {
   ctx.globalAlpha = 1;
 }
 
-// ── HUD ──────────────────────────────────────────
+// ── HUD ──
 function drawHUD() {
-  // Small pill at bottom
   ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.beginPath();
   ctx.roundRect(W / 2 - 200, H - 26, 400, 22, 11);
@@ -574,8 +639,8 @@ function drawHUD() {
     { label: 'LIVES',  val: '❤️'.repeat(lives) + '🖤'.repeat(Math.max(0, 3 - lives)) },
     { label: 'Q',      val: questionIdx + '/' + QUIZ_DATA.length },
   ];
-const spacing = 400 / items.length;
-items.forEach((item, i) => {
+  const spacing = 400 / items.length;
+  items.forEach((item, i) => {
     const ix = W / 2 - 200 + i * spacing + spacing / 2;
     ctx.font = "9px 'Nunito', sans-serif";
     ctx.textAlign = 'center';
@@ -585,144 +650,129 @@ items.forEach((item, i) => {
     ctx.font = "bold 12px 'Bangers', cursive";
     ctx.fillStyle = '#f5a623';
     ctx.fillText(String(item.val), ix + 38, H - 24);
-});
+  });
 }
 
-// ── Result banner ─────────────────────────────────
-function drawResultBanner() {
-    const msg = resultCorrect ? '✅  CORRECT!' : '❌  WRONG!';
-    const sub = resultCorrect ? '' : 'Correct: ' + resultQ.options[resultQ.correct];
-    const color = resultCorrect ? '#2ecc71' : '#e74c3c';
-    const prog = 1 - resultTimer / (resultCorrect ? 60 : 85);
+// ── Result banner ──
+function drawResultBanner(layout) {
+  const msg = resultCorrect ? '✅  CORRECT!' : '❌  WRONG!';
+  const sub = resultCorrect ? '' : 'Correct: ' + resultQ.options[resultQ.correct];
+  const color = resultCorrect ? '#2ecc71' : '#e74c3c';
+  const prog = 1 - resultTimer / (resultCorrect ? 60 : 85);
 
-    ctx.save();
-    ctx.globalAlpha = Math.min(1, prog * 5);
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, prog * 5);
 
-    // Banner bg
-    ctx.fillStyle = resultCorrect ? 'rgba(46,204,113,0.15)' : 'rgba(231,76,60,0.15)';
-    ctx.beginPath();
-    ctx.roundRect(W / 2 - 160, GAME_TOP + GAME_H / 2 - 40, 320, sub ? 80 : 55, 16);
-    ctx.fill();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(W / 2 - 160, GAME_TOP + GAME_H / 2 - 40, 320, sub ? 80 : 55, 16);
-    ctx.stroke();
+  const bannerW = 340;
+  const bannerH = sub ? 90 : 60;
+  const bannerX = W / 2 - bannerW / 2;
+  const bannerY = layout.gameTop + layout.gameH / 2 - bannerH / 2;
 
-    ctx.font = "bold 36px 'Bangers', cursive";
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = color;
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur = 8;
-    ctx.fillText(msg, W / 2, GAME_TOP + GAME_H / 2 - 14);
-    ctx.shadowBlur = 0;
+  ctx.fillStyle = resultCorrect ? 'rgba(46,204,113,0.15)' : 'rgba(231,76,60,0.15)';
+  ctx.beginPath();
+  ctx.roundRect(bannerX, bannerY, bannerW, bannerH, 16);
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(bannerX, bannerY, bannerW, bannerH, 16);
+  ctx.stroke();
 
-    if (sub) {
-        ctx.font = "bold 15px 'Nunito', sans-serif";
-        ctx.fillStyle = 'rgba(255,255,255,0.85)';
-        ctx.fillText(sub, W / 2, GAME_TOP + GAME_H / 2 + 24);
-    }
-    ctx.restore();
+  ctx.font = "bold 36px 'Bangers', cursive";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = color;
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 8;
+  ctx.fillText(msg, W / 2, bannerY + (sub ? 30 : bannerH / 2));
+  ctx.shadowBlur = 0;
+
+  if (sub) {
+    // Wrap the "correct answer" text too in case it's long
+    const subFont = "bold 14px 'Nunito', sans-serif";
+    const subLines = measureWrappedLines(sub, bannerW - 24, subFont);
+    ctx.font = subFont;
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    let sy = bannerY + 60 - ((subLines.length - 1) * 18) / 2;
+    subLines.forEach((l, i) => ctx.fillText(l, W / 2, sy + i * 18));
+  }
+  ctx.restore();
 }
 
-// ── Menu ──────────────────────────────────────────
+// ── Menu ──
 function drawMenu() {
-    ctx.fillStyle = 'rgba(8,8,18,0.88)';
-    ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(8,8,18,0.88)';
+  ctx.fillRect(0, 0, W, H);
 
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
-    ctx.font = "bold 72px 'Bangers', cursive";
-    ctx.fillStyle = '#f5a623';
-    ctx.shadowColor = '#c0392b'; ctx.shadowBlur = 14;
-    ctx.fillText('🧠 FlappyBrain', W / 2, H * 0.27);
-    ctx.shadowBlur = 0;
+  ctx.font = "bold 72px 'Bangers', cursive";
+  ctx.fillStyle = '#f5a623';
+  ctx.shadowColor = '#c0392b'; ctx.shadowBlur = 14;
+  ctx.fillText('🧠 FlappyBrain', W / 2, H * 0.27);
+  ctx.shadowBlur = 0;
 
-    ctx.font = "bold 16px 'Nunito', sans-serif";
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.fillText('The bird flies right — steer it into the CORRECT answer box!', W / 2, H * 0.44);
+  ctx.font = "bold 16px 'Nunito', sans-serif";
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.fillText('The bird flies right — steer it into the CORRECT answer box!', W / 2, H * 0.44);
 
-    ctx.font = "13px 'Nunito', sans-serif";
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.fillText('Hold ↑ ↓ or W S to move   •   Release to stay in place', W / 2, H * 0.52);
+  ctx.font = "13px 'Nunito', sans-serif";
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillText('Hold ↑ ↓ or W S to move   •   Release to stay in place', W / 2, H * 0.52);
 
-    // Button
-    ctx.fillStyle = '#f5a623';
-    ctx.beginPath(); ctx.roundRect(W / 2 - 100, H * 0.62, 200, 52, 30); ctx.fill();
-    ctx.font = "bold 26px 'Bangers', cursive";
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillText('▶  START QUIZ', W / 2, H * 0.62 + 26);
+  ctx.fillStyle = '#f5a623';
+  ctx.beginPath(); ctx.roundRect(W / 2 - 100, H * 0.62, 200, 52, 30); ctx.fill();
+  ctx.font = "bold 26px 'Bangers', cursive";
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillText('▶  START QUIZ', W / 2, H * 0.62 + 26);
 }
 
-// ── End ───────────────────────────────────────────
+// ── End ──
 function drawEnd() {
-    ctx.fillStyle = 'rgba(8,8,18,0.92)';
-    ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(8,8,18,0.92)';
+  ctx.fillRect(0, 0, W, H);
 
-    const pct = Math.round((correctCount / QUIZ_DATA.length) * 100);
-    const won = lives > 0;
-    const grade = pct >= 90 ? '🏆 Perfect!' : pct >= 70 ? '⭐ Great Job!' : pct >= 50 ? '👍 Not Bad!' : '😅 Keep Trying!';
+  const pct = Math.round((correctCount / QUIZ_DATA.length) * 100);
+  const won = lives > 0;
+  const grade = pct >= 90 ? '🏆 Perfect!' : pct >= 70 ? '⭐ Great Job!' : pct >= 50 ? '👍 Not Bad!' : '😅 Keep Trying!';
 
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
-    ctx.font = "bold 56px 'Bangers', cursive";
-    ctx.fillStyle = '#f5a623'; ctx.shadowColor = '#c0392b'; ctx.shadowBlur = 12;
-    ctx.fillText(won ? grade : '💀 Game Over', W / 2, H * 0.20);
-    ctx.shadowBlur = 0;
+  ctx.font = "bold 56px 'Bangers', cursive";
+  ctx.fillStyle = '#f5a623'; ctx.shadowColor = '#c0392b'; ctx.shadowBlur = 12;
+  ctx.fillText(won ? grade : '💀 Game Over', W / 2, H * 0.20);
+  ctx.shadowBlur = 0;
 
-    ctx.font = "bold 86px 'Bangers', cursive";
-    ctx.fillStyle = '#2ecc71';
-    ctx.shadowColor = 'rgba(46,204,113,0.5)'; ctx.shadowBlur = 22;
-    ctx.fillText(score, W / 2, H * 0.40);
-    ctx.shadowBlur = 0;
+  ctx.font = "bold 86px 'Bangers', cursive";
+  ctx.fillStyle = '#2ecc71';
+  ctx.shadowColor = 'rgba(46,204,113,0.5)'; ctx.shadowBlur = 22;
+  ctx.fillText(score, W / 2, H * 0.40);
+  ctx.shadowBlur = 0;
 
-    ctx.font = "11px 'Nunito', sans-serif";
+  ctx.font = "11px 'Nunito', sans-serif";
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillText('FINAL SCORE', W / 2, H * 0.52);
+
+  const stats = [
+    { label: 'Correct', val: correctCount, color: '#2ecc71' },
+    { label: 'Wrong', val: wrongCount, color: '#e74c3c' },
+    { label: 'Accuracy', val: pct + '%', color: '#f5a623' },
+  ];
+  stats.forEach((s, i) => {
+    const sx = W * 0.22 + i * (W * 0.28);
+    ctx.font = "bold 32px 'Bangers', cursive";
+    ctx.fillStyle = s.color;
+    ctx.fillText(s.val, sx, H * 0.64);
+    ctx.font = "10px 'Nunito', sans-serif";
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.fillText('FINAL SCORE', W / 2, H * 0.52);
+    ctx.fillText(s.label.toUpperCase(), sx, H * 0.72);
+  });
 
-    const stats = [
-        { label: 'Correct', val: correctCount, color: '#2ecc71' },
-        { label: 'Wrong', val: wrongCount, color: '#e74c3c' },
-        { label: 'Accuracy', val: pct + '%', color: '#f5a623' },
-    ];
-    stats.forEach((s, i) => {
-        const sx = W * 0.22 + i * (W * 0.28);
-        ctx.font = "bold 32px 'Bangers', cursive";
-        ctx.fillStyle = s.color;
-        ctx.fillText(s.val, sx, H * 0.64);
-        ctx.font = "10px 'Nunito', sans-serif";
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.fillText(s.label.toUpperCase(), sx, H * 0.72);
-    });
-
-    ctx.fillStyle = '#f5a623';
-    ctx.beginPath(); ctx.roundRect(W / 2 - 100, H * 0.80, 200, 52, 30); ctx.fill();
-    ctx.font = "bold 26px 'Bangers', cursive";
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillText('▶  PLAY AGAIN', W / 2, H * 0.80 + 26);
-}
-
-// ═══════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════
-function wrapText(ctx, text, x, y, maxW, lineH) {
-    const words = text.split(' ');
-    let line = '';
-    const lines = [];
-    for (const w of words) {
-        const test = line ? line + ' ' + w : w;
-        if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
-        else line = test;
-    }
-    lines.push(line);
-    const startY = y - ((lines.length - 1) * lineH) / 2;
-    lines.forEach((l, i) => ctx.fillText(l, x, startY + i * lineH));
-}
-
-function hexToRgb(hex) {
-    const n = parseInt(hex.slice(1), 16);
-    return ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255);
+  ctx.fillStyle = '#f5a623';
+  ctx.beginPath(); ctx.roundRect(W / 2 - 100, H * 0.80, 200, 52, 30); ctx.fill();
+  ctx.font = "bold 26px 'Bangers', cursive";
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillText('▶  PLAY AGAIN', W / 2, H * 0.80 + 26);
 }
 
 // ═══════════════════════════════════════
@@ -731,35 +781,34 @@ function hexToRgb(hex) {
 const keysDown = {};
 
 window.addEventListener('keydown', e => {
-    keysDown[e.key] = true;
-    if (['ArrowUp', 'ArrowDown', 'w', 'W', 's', 'S', ' '].includes(e.key)) e.preventDefault();
+  keysDown[e.key] = true;
+  if (['ArrowUp', 'ArrowDown', 'w', 'W', 's', 'S', ' '].includes(e.key)) e.preventDefault();
 });
 window.addEventListener('keyup', e => { keysDown[e.key] = false; });
 
-// Bird moves ONLY when key held; stops immediately when released
 function applyHeldKeys() {
-    if (phase !== 'playing' || resultPhase) return;
-    if (keysDown['ArrowUp'] || keysDown['w'] || keysDown['W']) {
-        bird.vy = -MOVE_SPEED;
-    } else if (keysDown['ArrowDown'] || keysDown['s'] || keysDown['S']) {
-        bird.vy = MOVE_SPEED;
-    } else {
-        bird.vy = 0;   // no key = bird stays perfectly still
-    }
+  if (phase !== 'playing' || resultPhase) return;
+  if (keysDown['ArrowUp'] || keysDown['w'] || keysDown['W']) {
+    bird.vy = -MOVE_SPEED;
+  } else if (keysDown['ArrowDown'] || keysDown['s'] || keysDown['S']) {
+    bird.vy = MOVE_SPEED;
+  } else {
+    bird.vy = 0;
+  }
 }
 
 canvas.addEventListener('click', () => {
-    if (phase === 'menu' || phase === 'ended') { startGame(); return; }
+  if (phase === 'menu' || phase === 'ended') { startGame(); return; }
 });
 
 let txStart = 0;
 canvas.addEventListener('touchstart', e => { txStart = e.touches[0].clientY; e.preventDefault(); }, { passive: false });
 canvas.addEventListener('touchmove', e => {
-    if (phase !== 'playing' || resultPhase) return;
-    const dy = e.touches[0].clientY - txStart;
-    bird.vy = dy > 0 ? MOVE_SPEED : -MOVE_SPEED;
-    txStart = e.touches[0].clientY;
-    e.preventDefault();
+  if (phase !== 'playing' || resultPhase) return;
+  const dy = e.touches[0].clientY - txStart;
+  bird.vy = dy > 0 ? MOVE_SPEED : -MOVE_SPEED;
+  txStart = e.touches[0].clientY;
+  e.preventDefault();
 }, { passive: false });
 canvas.addEventListener('touchend', () => { bird.vy = 0; });
 
@@ -768,25 +817,24 @@ canvas.addEventListener('touchend', () => { bird.vy = 0; });
 // ═══════════════════════════════════════
 let rafId;
 function loop() {
-    applyHeldKeys();
-    update();
-    draw();
-    rafId = requestAnimationFrame(loop);
+  applyHeldKeys();
+  update();
+  draw();
+  rafId = requestAnimationFrame(loop);
 }
 
 function startGame() {
-    cancelAnimationFrame(rafId);
-    trailPoints = [];
-    initGame();
-    phase = 'playing';
-    loop();
+  cancelAnimationFrame(rafId);
+  trailPoints = [];
+  initGame();
+  phase = 'playing';
+  loop();
 }
 
 // Boot
 initGame();
 phase = 'menu';
 loop();
-</script >
-</body >
-</html >
-    `;
+</script>
+</body>
+</html>    `;
