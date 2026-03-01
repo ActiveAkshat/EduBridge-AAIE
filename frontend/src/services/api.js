@@ -77,5 +77,7 @@ export const exportChapterCombinedPDF = (chapterTitle, topics, templateDataUrl) 
 export const generateQuiz = (topic, text) =>
   apiClient.post("/generate_quiz", { topic_title: topic, simplified_text: text });
 
+export const generateImages = (data) =>
+  apiClient.post("/generate_images", data);
 
 export default apiClient;

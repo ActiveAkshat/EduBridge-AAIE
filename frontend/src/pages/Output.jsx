@@ -70,6 +70,12 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
   const [isDownloadingMindmap, setIsDownloadingMindmap] = useState(false);
   const [isDownloadingChapter, setIsDownloadingChapter] = useState(false);
 
+  // Image states
+  const [showImages, setShowImages] = useState(false);
+  const [imagesData, setImagesData] = useState(null);
+  const [isGeneratingImages, setIsGeneratingImages] = useState(false);
+  const [imagesError, setImagesError] = useState(null);
+
   useEffect(() => {
     if (topics.length > 0 && !isProcessing) {
       simplifyAllTopics();
@@ -523,7 +529,33 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
       setIsDownloadingMindmap(false);
     }
   };
+  //Image Generation
+  const generateImages = async () => {
+    if (!selectedTopic) return;
+    setIsGeneratingImages(true);
+    setImagesError(null);
+    setShowImages(true);
 
+    try {
+      const content =
+        selectedLanguage === "hindi" && selectedTopic.content_hindi
+          ? selectedTopic.content_hindi
+          : selectedTopic.content;
+
+      const response = await api.generateImages({ text: content });
+      setImagesData(response.data.data.images);
+    } catch (err) {
+      setImagesError(err.response?.data?.message || err.message || "Failed to generate images");
+    } finally {
+      setIsGeneratingImages(false);
+    }
+  };
+
+  const closeImages = () => {
+    setShowImages(false);
+    setImagesData(null);
+    setImagesError(null);
+  };
   // ✅ NEW: Download Entire Chapter PDF
   const handleDownloadChapterPDF = async () => {
     if (!simplifiedTopics || simplifiedTopics.length === 0) return;
@@ -815,6 +847,17 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
                 <span className="text-2xl">🎮</span>
                 <span className="font-medium">Quiz</span>
               </button>
+              <button
+                onClick={generateImages}
+                disabled={!selectedTopic || isSimplifying || isTranslating}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${selectedTopic && !isSimplifying && !isTranslating
+                  ? "bg-pink-600 hover:bg-pink-700 text-white"
+                  : "bg-gray-700 text-gray-500 cursor-not-allowed"
+                  }`}
+              >
+                <span className="text-2xl">🖼️</span>
+                <span className="font-medium">Concept Images</span>
+              </button>
             </div>
           </aside>
         </div>
@@ -935,6 +978,67 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
           </div>
         </div>
       )}
+      {/* Images Modal */}
+      {showImages && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
+          <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <span className="text-2xl">🖼️</span>
+                Concept Visuals: {selectedTopic?.topic}
+              </h3>
+              <button onClick={closeImages} className="p-2 hover:bg-gray-700 rounded-lg transition">
+                <X size={24} className="text-gray-400" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-6">
+              {isGeneratingImages ? (
+                <div className="flex flex-col items-center justify-center h-64 space-y-4">
+                  <Loader size={48} className="animate-spin text-pink-500" />
+                  <p className="text-gray-300 text-lg">Generating concept visuals...</p>
+                  <p className="text-gray-500 text-sm">Creating image prompts and illustrations</p>
+                </div>
+              ) : imagesError ? (
+                <div className="flex flex-col items-center justify-center h-64 space-y-4">
+                  <div className="bg-red-900/20 border border-red-500 rounded-lg p-6 max-w-md">
+                    <p className="text-red-300 text-center mb-4">{imagesError}</p>
+                    <button
+                      onClick={generateImages}
+                      className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                </div>
+              ) : imagesData && imagesData.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {imagesData.map((img, idx) => (
+                    <div key={idx} className="bg-gray-700 rounded-xl overflow-hidden shadow-lg">
+                      {img.error ? (
+                        <div className="h-48 flex items-center justify-center bg-gray-600">
+                          <p className="text-gray-400 text-sm text-center px-4">❌ Could not generate this image</p>
+                        </div>
+                      ) : (
+                        <img
+                          src={img.image_b64 ? `data:image/png;base64,${img.image_b64}` : img.image_url}
+                          alt={img.title}
+                          className="w-full h-48 object-cover"
+                        />
+                      )}
+                      <div className="p-4">
+                        <h4 className="text-white font-semibold mb-1">{img.title}</h4>
+                        <p className="text-gray-400 text-sm">{img.caption}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -978,7 +1082,7 @@ const ConceptCardsView = ({ nodes }) => {
 //Quiz Generator
 const generateQuizHTML = (quizJson) => {
   console.log("generateQuizHTML received:", quizJson);
-  
+
   if (!quizJson || !quizJson.questions || quizJson.questions.length === 0) {
     console.warn("No quiz data provided, using default template");
     return QUIZ_TEMPLATE_HTML;

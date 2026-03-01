@@ -12,7 +12,7 @@ def simplify_text_route():
     if not text:
         return error_response("No text provided", 400)
 
-    client = initialize_openai_client()
+    client = initialize_simplify_client()
     try:
         simplified = simplify_text(client, text)
         return success_response(simplified)

@@ -15,7 +15,7 @@ def generate_quiz_route():
         return error_response("Topic title and simplified text are required", 400)
 
     try:
-        client = initialize_openai_client()
+        client = initialize_quiz_client()
         quiz = generate_quiz(client, topic_title, simplified_text)
         return success_response(quiz, "Quiz generated successfully")
     except Exception as e:

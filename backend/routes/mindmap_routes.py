@@ -12,7 +12,7 @@ def generate_mindmap_route():
     if not text:
         return error_response("No text provided", 400)
 
-    client = initialize_openai_client()
+    client = initialize_mindmap_client()
     try:
         mindmap = generate_mindmap_code(client, text)
         return success_response(mindmap)

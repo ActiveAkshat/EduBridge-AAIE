@@ -12,7 +12,7 @@ def generate_flashcards_route():
     if not text:
         return error_response("No text provided", 400)
 
-    client = initialize_openai_client()
+    client = initialize_flashcards_client()
     try:
         cards = generate_flashcards(client, text)
         return success_response(cards)
