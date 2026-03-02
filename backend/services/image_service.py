@@ -12,32 +12,88 @@ def generate_image_prompts(client, simplified_text: str):
     messages = [
         {
             "role": "system",
-            "content": "You are an expert at creating clear, descriptive image prompts for educational visuals. Return only valid JSON."
+            "content": """
+You are an expert educational visual designer.
+
+Your task is to generate highly accurate, curriculum-aligned visual prompts for students.
+
+You must:
+- Detect the academic subject automatically (science, history, geography, civics, economics, literature, mathematics, etc.).
+- Adapt the visual style based on the subject.
+- Prioritize textbook accuracy.
+- Never invent facts, labels, events, people, or structures not mentioned in the source text.
+- Return ONLY valid JSON.
+"""
         },
         {
             "role": "user",
             "content": f"""
-Analyze the following simplified educational text and generate 1-3 image prompts that would create helpful conceptual visuals for students.
+Analyze the following simplified educational text and generate 1–3 image prompts.
 
-**Source Text:**
----
+--------------------
+SOURCE TEXT:
 {simplified_text}
----
+--------------------
 
-**Guidelines:**
-1. Each prompt should visualize a distinct key concept from the text.
-2. Prompts should describe clear, educational diagrams or illustrations — not photos.
-3. Style: "clean educational illustration, minimalist, flat design, white background, labeled diagram"
-4. Keep prompts concise but descriptive (30-50 words each).
-5. Include a short title and a one-line caption for each image.
+GENERAL RULES (APPLY TO ALL SUBJECTS):
 
-**Output (JSON only):**
+1. Each image must represent a distinct key concept from the text.
+2. Do NOT invent facts, names, dates, structures, labels, or processes not explicitly stated.
+3. Maintain historical, cultural, scientific, and contextual accuracy.
+4. Keep prompts concise but descriptive (30–60 words).
+5. White or neutral background unless context demands otherwise.
+6. Avoid fantasy or dramatic artistic exaggeration.
+7. Keep visuals classroom-appropriate and exam-aligned.
+
+SUBJECT-SPECIFIC RULES:
+
+If SCIENCE:
+- Create clean textbook-style diagrams.
+- Show correct spatial relationships.
+- Arrows must indicate correct process direction.
+- Include only labels explicitly mentioned.
+- Avoid artistic distortion of proportions.
+
+If HISTORY:
+- Depict historically accurate clothing, setting, and time period.
+- If a prominent person is mentioned, ensure realistic portrait style.
+- No fictional elements.
+- No invented events or symbols.
+- If an event is described, show only what is mentioned.
+
+If GEOGRAPHY:
+- Accurate map orientation.
+- Correct land-water relationships.
+- Include only named features from text.
+- No extra landmarks.
+
+If CIVICS / POLITICAL SCIENCE:
+- Use neutral, unbiased representation.
+- If institutions are shown (parliament, court, etc.), represent them factually.
+- Avoid symbolic exaggeration.
+
+If ECONOMICS:
+- Use simple charts or conceptual illustrations only if text mentions data or processes.
+- No invented statistics.
+
+If MATHEMATICS:
+- Clean step-based visual representation.
+- Only include formulas or variables present in text.
+- No additional theorems.
+
+If LITERATURE:
+- Illustrate only scenes explicitly described.
+- Avoid adding implied symbolism.
+- Maintain narrative accuracy.
+
+OUTPUT FORMAT (STRICT JSON ONLY):
+
 {{
   "images": [
     {{
       "title": "Short concept title",
-      "caption": "One sentence explaining what this image shows and why it helps",
-      "prompt": "Detailed image generation prompt here..."
+      "caption": "One sentence explaining why this visual helps student understanding.",
+      "prompt": "Precise image generation prompt aligned with subject rules..."
     }}
   ]
 }}
