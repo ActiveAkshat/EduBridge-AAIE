@@ -10,7 +10,7 @@ from routes.audio_routes import audio_bp
 from routes.export_routes import export_bp
 from routes.quiz_routes import quiz_bp
 from routes.image_routes import image_bp
-from routes.quickcheck_routes import quickcheck_bp
+from routes.mcq_routes import mcq_bp
 from routes.mindmap_explain_routes import mindmap_explain_bp
 from routes.insights_routes import insights_bp
 
@@ -39,7 +39,7 @@ app.register_blueprint(audio_bp)
 app.register_blueprint(export_bp)
 app.register_blueprint(quiz_bp)
 app.register_blueprint(image_bp)
-app.register_blueprint(quickcheck_bp)
+app.register_blueprint(mcq_bp)
 app.register_blueprint(mindmap_explain_bp)
 app.register_blueprint(insights_bp)
 

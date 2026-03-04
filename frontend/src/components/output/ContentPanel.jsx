@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw, Volume2, Loader, Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import * as api from "../../services/api";
-import QuickCheck from "./QuickCheck";
+import MCQ from "./MCQ";
 
 // ── Helpers ────────────────────────────────────────────────────
 const escapeHtml = (s) =>
@@ -55,10 +55,10 @@ const ContentPanel = ({
   const [duration, setDuration]                   = useState(0);
   const [audioLoaded, setAudioLoaded]             = useState(false);
 
-  // QuickCheck state
-  const [qcQuestions, setQcQuestions]             = useState(null);
-  const [qcLoading, setQcLoading]                 = useState(false);
-  const [qcError, setQcError]                     = useState(null);
+  // MCQ state
+  const [mcqQuestions, setMcqQuestions] = useState(null);
+  const [mcqLoading, setMcqLoading]     = useState(false);
+  const [mcqError, setMcqError]         = useState(null);
 
   // ── Audio listeners ────────────────────────────────────────
   useEffect(() => {
@@ -87,34 +87,41 @@ const ContentPanel = ({
       setDuration(0);
       setAudioError(null);
     }
-    // Reset quick check too
-    setQcQuestions(null);
-    setQcError(null);
+    // Reset MCQ too
+    setMcqQuestions(null);
+    setMcqError(null);
   }, [selectedTopic]);
 
-  // ── Auto-generate QuickCheck when topic content is ready ──
+  // ── Fetch MCQ when topic is ready ─────────────────────────
   useEffect(() => {
-    if (selectedTopic && selectedTopic.content && !selectedTopic.error && !isSimplifying && !isTranslating) {
-      fetchQuickCheck();
+    if (
+      selectedTopic?.topic &&
+      selectedTopic?.content &&
+      !selectedTopic?.error &&
+      !isSimplifying &&
+      !isTranslating
+    ) {
+      const content =
+        selectedLanguage === "hindi" && selectedTopic.content_hindi
+          ? selectedTopic.content_hindi
+          : selectedTopic.content;
+      fetchMCQ(selectedTopic.topic, content);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTopic?.topic]);
+  }, [selectedTopic?.topic, isSimplifying, isTranslating]);
 
-  const fetchQuickCheck = async () => {
-    if (!selectedTopic) return;
-    setQcLoading(true);
-    setQcError(null);
-    setQcQuestions(null);
+  const fetchMCQ = async (topic, content) => {
+    if (!topic || !content) return;
+    setMcqLoading(true);
+    setMcqError(null);
+    setMcqQuestions(null);
     try {
-      const content = selectedLanguage === "hindi" && selectedTopic.content_hindi
-        ? selectedTopic.content_hindi
-        : selectedTopic.content;
-      const res = await api.generateQuickCheck(selectedTopic.topic, content);
-      setQcQuestions(res.data.data.questions);
+      const res = await api.generateMCQ(topic, content);
+      setMcqQuestions(res.data.data.questions);
     } catch (err) {
-      setQcError(err.response?.data?.message || err.message || "Failed to load questions");
+      setMcqError(err.response?.data?.message || err.message || "Failed to load questions");
     } finally {
-      setQcLoading(false);
+      setMcqLoading(false);
     }
   };
 
@@ -288,11 +295,18 @@ const ContentPanel = ({
               </div>
 
               {/* ── Quick Check ───────────────────────────────────── */}
-              <QuickCheck
-                questions={qcQuestions}
-                isLoading={qcLoading}
-                error={qcError}
-                onRetry={fetchQuickCheck}
+              <MCQ
+                key={selectedTopic?.topic}
+                questions={mcqQuestions}
+                isLoading={mcqLoading}
+                error={mcqError}
+                onRetry={() => {
+                  const content =
+                    selectedLanguage === "hindi" && selectedTopic?.content_hindi
+                      ? selectedTopic.content_hindi
+                      : selectedTopic?.content;
+                  fetchMCQ(selectedTopic?.topic, content);
+                }}
               />
             </>
           )}

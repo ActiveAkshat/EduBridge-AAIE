@@ -80,8 +80,8 @@ export const generateQuiz = (topic, text) =>
 export const generateImages = (data) =>
   apiClient.post("/generate_images", data);
 
-export const generateQuickCheck = (topic, content) =>
-  axios.post("/quickcheck", { topic, content });
+export const generateMCQ = (topic, content) =>
+  apiClient.post("/mcq", { topic, content });
 
 export const explainMindmap = (mindmapData) =>
   axios.post(
@@ -95,11 +95,11 @@ export const generateInsights = (payload) =>
 
 // Explain Feature for Flashcards
 
-export const explainFlashcard = (question, answer, language) => 
-  apiClient.post("/explain_flashcard", { 
-    question, 
-    answer, 
-    language 
+export const explainFlashcard = (question, answer, language) =>
+  apiClient.post("/explain_flashcard", {
+    question,
+    answer,
+    language
   });
 
 export default apiClient;
