@@ -1,14 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ArrowLeft, FileText, Layers, Loader } from "lucide-react";
 import * as api from "../services/api";
 
-import TopicsSidebar  from "./output/TopicsSidebar";
-import ContentPanel   from "./output/ContentPanel";
-import Studio         from "./output/Studio";
-import MindmapModal   from "./output/MindmapModal";
-import FlashcardModal from "./output/FlashcardModal";
-import QuizModal      from "./output/QuizModal";
-import ImagesModal    from "./output/ImagesModal";
+import TopicsSidebar  from "../components/output/TopicsSidebar";
+import ContentPanel   from "../components/output/ContentPanel";
+import Studio         from "../components/output/Studio";
+import MindmapModal   from "../components/output/MindmapModal";
+import FlashcardModal from "../components/output/FlashcardModal";
+import QuizModal      from "../components/output/QuizModal";
+import ImagesModal    from "../components/output/ImagesModal";
+import InsightsModal  from "../components/output/InsightsModal";
 import useExportPDF   from "../hooks/useExportPDF";
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -37,6 +38,15 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
   const [mindmapError, setMindmapError]         = useState(null);
   const [isDownloadingMindmap, setIsDownloadingMindmap] = useState(false);
 
+  // Mindmap Explain states
+  const [isExplainingMindmap, setIsExplainingMindmap] = useState(false);
+  const [explainAudioLoaded, setExplainAudioLoaded] = useState(false);
+  const [isExplainPlaying, setIsExplainPlaying] = useState(false);
+  const [explainCurrentTime, setExplainCurrentTime] = useState(0);
+  const [explainDuration, setExplainDuration] = useState(0);
+  const [explainError, setExplainError] = useState(null);
+  const explainAudioRef = useRef(null);
+
   // Flashcard state
   const [showFlashcards, setShowFlashcards]     = useState(false);
   const [flashcardsData, setFlashcardsData]     = useState(null);
@@ -55,6 +65,12 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
   const [isGeneratingImages, setIsGeneratingImages] = useState(false);
   const [imagesError, setImagesError]           = useState(null);
 
+  // Insights states
+  const [showInsights, setShowInsights] = useState(false);
+  const [insightsData, setInsightsData] = useState(null);
+  const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
+  const [insightsError, setInsightsError] = useState(null);
+
   const chapterTitle = originalData?.chapter_title || topics[0]?.chapter || "Chapter Notes";
 
   // PDF export hook — receives mindmapCache and its setter so it can
@@ -65,6 +81,26 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
     handleDownloadChapterPDF,
     handleDownloadChapterCombinedPDF,
   } = useExportPDF(simplifiedTopics, selectedLanguage, chapterTitle, mindmapCache, setMindmapCache);
+
+  // Explain audio event listeners
+  useEffect(() => {
+    const audio = explainAudioRef.current;
+    if (!audio) return;
+
+    const updateTime  = () => setExplainCurrentTime(audio.currentTime);
+    const updateDur   = () => setExplainDuration(audio.duration);
+    const handleEnded = () => setIsExplainPlaying(false);
+
+    audio.addEventListener("timeupdate",     updateTime);
+    audio.addEventListener("loadedmetadata", updateDur);
+    audio.addEventListener("ended",          handleEnded);
+
+    return () => {
+      audio.removeEventListener("timeupdate",     updateTime);
+      audio.removeEventListener("loadedmetadata", updateDur);
+      audio.removeEventListener("ended",          handleEnded);
+    };
+  }, [explainAudioLoaded]);
 
   // ── Simplify ──────────────────────────────────────────────────
   useEffect(() => {
@@ -156,6 +192,13 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
     setShowMindmap(true);
     setMindmapError(null);
 
+    // Reset explain state when generating a new mindmap
+    setExplainAudioLoaded(false);
+    setIsExplainPlaying(false);
+    setExplainCurrentTime(0);
+    setExplainDuration(0);
+    setExplainError(null);
+
     const cacheKey = selectedTopic.topic;
 
     // Hit cache first — no API call needed
@@ -179,6 +222,67 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
     } finally {
       setIsGeneratingMindmap(false);
     }
+  };
+
+  // Mindmap Explain
+  const handleExplainMindmap = async () => {
+    if (!activeMindmapData) return;
+
+    setIsExplainingMindmap(true);
+    setExplainError(null);
+    setExplainAudioLoaded(false);
+    setIsExplainPlaying(false);
+    setExplainCurrentTime(0);
+    setExplainDuration(0);
+
+    // Stop any currently playing explain audio
+    if (explainAudioRef.current) {
+      explainAudioRef.current.pause();
+    }
+
+    try {
+      const response = await api.explainMindmap(activeMindmapData);
+      const audioBlob = new Blob([response.data], { type: "audio/mpeg" });
+      const audioUrl  = URL.createObjectURL(audioBlob);
+
+      if (explainAudioRef.current) {
+        explainAudioRef.current.src = audioUrl;
+        explainAudioRef.current.load();
+        setExplainAudioLoaded(true);
+        explainAudioRef.current.play();
+        setIsExplainPlaying(true);
+      }
+    } catch (err) {
+      setExplainError(err.response?.data?.message || err.message || "Failed to generate explanation");
+    } finally {
+      setIsExplainingMindmap(false);
+    }
+  };
+
+  const toggleExplainPlayPause = () => {
+    if (!explainAudioRef.current) return;
+    if (isExplainPlaying) {
+      explainAudioRef.current.pause();
+      setIsExplainPlaying(false);
+    } else {
+      explainAudioRef.current.play();
+      setIsExplainPlaying(true);
+    }
+  };
+
+  const handleExplainSeek = (e) => {
+    const newTime = parseFloat(e.target.value);
+    if (explainAudioRef.current) {
+      explainAudioRef.current.currentTime = newTime;
+      setExplainCurrentTime(newTime);
+    }
+  };
+
+  const formatTime = (timeInSeconds) => {
+    if (isNaN(timeInSeconds)) return "0:00";
+    const minutes = Math.floor(timeInSeconds / 60);
+    const seconds = Math.floor(timeInSeconds % 60);
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
   const handleDownloadMindmapPDF = async () => {
@@ -261,6 +365,28 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
     }
   };
 
+  // ── Insights ──────────────────────────────────────────────────
+  const generateInsights = async () => {
+    if (!selectedTopic) return;
+    setIsGeneratingInsights(true);
+    setInsightsError(null);
+    setShowInsights(true);
+
+    try {
+      const content =
+        selectedLanguage === "hindi" && selectedTopic.content_hindi
+          ? selectedTopic.content_hindi
+          : selectedTopic.content;
+
+      const response = await api.generateInsights({ text: content });
+      setInsightsData(response.data.data);
+    } catch (err) {
+      setInsightsError(err.response?.data?.message || err.message || "Failed to generate insights");
+    } finally {
+      setIsGeneratingInsights(false);
+    }
+  };
+
   if (!topics.length) return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 flex items-center justify-center">
       <div className="text-center">
@@ -272,6 +398,7 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100">
+      <audio ref={explainAudioRef} />
       <div id="hidden-mindmap-export" style={{ position: "absolute", left: "-9999px", top: "-9999px", width: "1200px", height: "900px", background: "white" }} />
 
       <header className="bg-gray-800 border-b border-gray-700 shadow-lg">
@@ -346,6 +473,7 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
             onFlashcards={generateFlashcards}
             onQuiz={generateQuiz}
             onImages={generateImages}
+            onInsights={generateInsights}
           />
         </div>
       </main>
@@ -356,10 +484,34 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
           mindmapData={activeMindmapData}
           isGenerating={isGeneratingMindmap}
           error={mindmapError}
-          onClose={() => { setShowMindmap(false); setActiveMindmapData(null); setMindmapError(null); }}
+          onClose={() => {
+            setShowMindmap(false);
+            setActiveMindmapData(null);
+            setMindmapError(null);
+            // Stop & reset explain audio
+            if (explainAudioRef.current) {
+              explainAudioRef.current.pause();
+            }
+            setExplainAudioLoaded(false);
+            setIsExplainPlaying(false);
+            setExplainCurrentTime(0);
+            setExplainDuration(0);
+            setExplainError(null);
+          }}
           onRetry={generateMindmap}
           onDownloadPDF={handleDownloadMindmapPDF}
           isDownloadingPDF={isDownloadingMindmap}
+          // Explain audio props
+          onExplainMindmap={handleExplainMindmap}
+          isExplainingMindmap={isExplainingMindmap}
+          explainAudioLoaded={explainAudioLoaded}
+          explainError={explainError}
+          isExplainPlaying={isExplainPlaying}
+          explainCurrentTime={explainCurrentTime}
+          explainDuration={explainDuration}
+          onToggleExplainPlayPause={toggleExplainPlayPause}
+          onExplainSeek={handleExplainSeek}
+          formatTime={formatTime}
         />
       )}
 
@@ -369,6 +521,7 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
           isLoading={isGeneratingFlashcards}
           error={flashcardsError}
           topicName={selectedTopic?.topic}
+          selectedLanguage={selectedLanguage}
           onClose={() => { setShowFlashcards(false); setFlashcardsData(null); setFlashcardsError(null); }}
           onRetry={generateFlashcards}
         />
@@ -391,6 +544,17 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
           error={imagesError}
           onClose={() => { setShowImages(false); setImagesData(null); setImagesError(null); }}
           onRetry={generateImages}
+        />
+      )}
+
+      {showInsights && (
+        <InsightsModal
+          data={insightsData}
+          isLoading={isGeneratingInsights}
+          error={insightsError}
+          topicName={selectedTopic?.topic}
+          onClose={() => { setShowInsights(false); setInsightsData(null); setInsightsError(null); }}
+          onRetry={generateInsights}
         />
       )}
     </div>

@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Download, Loader } from "lucide-react";
-import * as api from "../../services/api";
+import { X, Download, Loader, Volume2, Pause, Play } from "lucide-react";
 
 // ── Concept Cards ──────────────────────────────────────────────
 const ConceptCardsView = ({ nodes }) => {
@@ -98,12 +97,33 @@ const MindmapRenderer = ({ data }) => {
 };
 
 // ── Modal ──────────────────────────────────────────────────────
-const MindmapModal = ({ selectedTopic, mindmapData, isGenerating, error, onClose, onRetry, onDownloadPDF, isDownloadingPDF }) => {
+const MindmapModal = ({
+  selectedTopic,
+  mindmapData,
+  isGenerating,
+  error,
+  onClose,
+  onRetry,
+  onDownloadPDF,
+  isDownloadingPDF,
+  // Explain audio props
+  onExplainMindmap,
+  isExplainingMindmap,
+  explainAudioLoaded,
+  explainError,
+  isExplainPlaying,
+  explainCurrentTime,
+  explainDuration,
+  onToggleExplainPlayPause,
+  onExplainSeek,
+  formatTime,
+}) => {
   const [showConceptCards, setShowConceptCards] = useState(false);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
       <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
+
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <h3 className="text-xl font-bold text-white flex items-center gap-2">
             <span className="text-2xl">🗺️</span>
@@ -115,29 +135,84 @@ const MindmapModal = ({ selectedTopic, mindmapData, isGenerating, error, onClose
         </div>
 
         {!isGenerating && !error && mindmapData && (
-          <div className="flex gap-2 px-4 pt-4 border-b border-gray-700">
-            <button
-              onClick={() => setShowConceptCards(false)}
-              className={`px-4 py-2 rounded-t-lg transition ${!showConceptCards ? "bg-gray-700 text-white" : "bg-gray-900 text-gray-400 hover:text-white"}`}
-            >
-              Mind Map View
-            </button>
-            <button
-              onClick={() => setShowConceptCards(true)}
-              className={`px-4 py-2 rounded-t-lg transition ${showConceptCards ? "bg-gray-700 text-white" : "bg-gray-900 text-gray-400 hover:text-white"}`}
-            >
-              📚 Concept Cards
-            </button>
-            <button
-              onClick={onDownloadPDF}
-              disabled={isDownloadingPDF}
-              className={`px-4 py-2 rounded-t-lg transition flex items-center gap-2 ${
-                isDownloadingPDF ? "bg-purple-700/50 text-white cursor-not-allowed" : "bg-purple-600 hover:bg-purple-700 text-white"
-              }`}
-            >
-              {isDownloadingPDF ? <Loader size={16} className="animate-spin" /> : <Download size={16} />}
-              Download PDF
-            </button>
+          <div className="flex flex-col gap-0 border-b border-gray-700">
+
+            {/* Tab row */}
+            <div className="flex gap-2 px-4 pt-4 flex-wrap">
+              <button
+                onClick={() => setShowConceptCards(false)}
+                className={`px-4 py-2 rounded-t-lg transition ${!showConceptCards ? "bg-gray-700 text-white" : "bg-gray-900 text-gray-400 hover:text-white"}`}
+              >
+                Mind Map View
+              </button>
+              <button
+                onClick={() => setShowConceptCards(true)}
+                className={`px-4 py-2 rounded-t-lg transition ${showConceptCards ? "bg-gray-700 text-white" : "bg-gray-900 text-gray-400 hover:text-white"}`}
+              >
+                📚 Concept Cards
+              </button>
+              <button
+                onClick={onDownloadPDF}
+                disabled={isDownloadingPDF}
+                className={`px-4 py-2 rounded-t-lg transition flex items-center gap-2 ${
+                  isDownloadingPDF ? "bg-purple-700/50 text-white cursor-not-allowed" : "bg-purple-600 hover:bg-purple-700 text-white"
+                }`}
+              >
+                {isDownloadingPDF ? <Loader size={16} className="animate-spin" /> : <Download size={16} />}
+                Download PDF
+              </button>
+
+              {/* ── Explain button ── */}
+              <button
+                onClick={onExplainMindmap}
+                disabled={isExplainingMindmap}
+                className={`px-4 py-2 rounded-t-lg transition flex items-center gap-2 ml-auto ${
+                  isExplainingMindmap
+                    ? "bg-orange-700/50 text-white cursor-not-allowed"
+                    : "bg-orange-500 hover:bg-orange-600 text-white"
+                }`}
+                title="Let AI explain this mind map out loud"
+              >
+                {isExplainingMindmap
+                  ? <><Loader size={16} className="animate-spin" /> Generating...</>
+                  : <><Volume2 size={16} /> 🎙️ Explain</>
+                }
+              </button>
+            </div>
+
+            {/* ── Explain audio player ── */}
+            {(explainAudioLoaded || explainError) && (
+              <div className="mx-4 mb-3 mt-2 bg-gradient-to-r from-orange-900/30 to-yellow-900/30 border border-orange-500/40 rounded-xl px-5 py-3">
+                {explainError ? (
+                  <p className="text-red-300 text-sm">{explainError}</p>
+                ) : (
+                  <div className="flex items-center gap-4">
+                    <span className="text-orange-300 text-sm font-medium whitespace-nowrap">🎙️ AI Explanation</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max={explainDuration || 0}
+                      value={explainCurrentTime}
+                      onChange={onExplainSeek}
+                      className="flex-1 h-1.5 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-orange-400"
+                    />
+                    <span className="text-gray-400 text-xs whitespace-nowrap">
+                      {formatTime(explainCurrentTime)} / {formatTime(explainDuration)}
+                    </span>
+                    <button
+                      onClick={onToggleExplainPlayPause}
+                      className="p-2 bg-orange-500 hover:bg-orange-600 rounded-full transition flex-shrink-0"
+                    >
+                      {isExplainPlaying
+                        ? <Pause size={16} className="text-white" fill="white" />
+                        : <Play  size={16} className="text-white ml-0.5" fill="white" />
+                      }
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
         )}
 
@@ -164,6 +239,7 @@ const MindmapModal = ({ selectedTopic, mindmapData, isGenerating, error, onClose
                 </div>
           ) : null}
         </div>
+
       </div>
     </div>
   );

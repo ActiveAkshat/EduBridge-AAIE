@@ -1,5 +1,5 @@
 import { useState } from "react";
-import * as api from "../../services/api";
+import * as api from "../services/api";
 
 const downloadBlob = (blob, filename) => {
   const url = window.URL.createObjectURL(blob);

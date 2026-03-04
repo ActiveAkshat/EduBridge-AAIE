@@ -1,10 +1,11 @@
-const Studio = ({ selectedTopic, isSimplifying, isTranslating, onMindmap, onFlashcards, onQuiz, onImages }) => {
+const Studio = ({ selectedTopic, isSimplifying, isTranslating, onMindmap, onFlashcards, onQuiz, onImages, onInsights }) => {
   const enabled = selectedTopic && !isSimplifying && !isTranslating;
 
   const buttons = [
     { label: "Mind Map",       emoji: "🗺️", color: "bg-purple-600 hover:bg-purple-700", onClick: onMindmap },
     { label: "Flashcards",     emoji: "🗂️", color: "bg-green-600 hover:bg-green-700",  onClick: onFlashcards },
     { label: "Quiz",           emoji: "🎮", color: "bg-yellow-600 hover:bg-yellow-700", onClick: onQuiz },
+    { label: "Key Insights",   emoji: "💡", color: "bg-cyan-600 hover:bg-cyan-700",     onClick: onInsights },
     { label: "Concept Images", emoji: "🖼️", color: "bg-pink-600 hover:bg-pink-700",    onClick: onImages },
   ];
 

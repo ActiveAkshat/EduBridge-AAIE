@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { X, RefreshCw, ChevronLeft, ChevronRight, Loader } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, RefreshCw, ChevronLeft, ChevronRight, Loader, RotateCcw } from "lucide-react";
+import * as api from "../../services/api";
 
 const GRADIENTS = [
   'from-purple-600 via-purple-500 to-pink-500',
@@ -12,9 +13,22 @@ const GRADIENTS = [
   'from-amber-600 via-orange-500 to-red-500',
 ];
 
-const FlashcardModal = ({ flashcards, isLoading, error, topicName, onClose, onRetry }) => {
+const FlashcardModal = ({ flashcards, isLoading, error, topicName, selectedLanguage, onClose, onRetry }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
+
+  // ── Explanation states ─────────────────────────────────────
+  const [showExplanation, setShowExplanation]           = useState(false);
+  const [explanation, setExplanation]                   = useState(null);
+  const [isLoadingExplanation, setIsLoadingExplanation] = useState(false);
+  const [explanationError, setExplanationError]         = useState(null);
+
+  // Reset explanation when card changes
+  useEffect(() => {
+    setShowExplanation(false);
+    setExplanation(null);
+    setExplanationError(null);
+  }, [currentIndex]);
 
   if (isLoading) return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 p-4">
@@ -44,12 +58,35 @@ const FlashcardModal = ({ flashcards, isLoading, error, topicName, onClose, onRe
 
   if (!flashcards?.length) return null;
 
-  const card = flashcards[currentIndex];
-  const total = flashcards.length;
+  const card     = flashcards[currentIndex];
+  const total    = flashcards.length;
   const gradient = GRADIENTS[currentIndex % GRADIENTS.length];
 
   const goNext = () => { if (currentIndex < total - 1) { setCurrentIndex(i => i + 1); setIsFlipped(false); } };
-  const goPrev = () => { if (currentIndex > 0) { setCurrentIndex(i => i - 1); setIsFlipped(false); } };
+  const goPrev = () => { if (currentIndex > 0)         { setCurrentIndex(i => i - 1); setIsFlipped(false); } };
+
+  // ── Explain handler ────────────────────────────────────────
+  const handleExplain = async (e) => {
+    e.stopPropagation(); // prevent card flip
+
+    if (showExplanation) {
+      setShowExplanation(false);
+      return;
+    }
+
+    setIsLoadingExplanation(true);
+    setExplanationError(null);
+
+    try {
+      const response = await api.explainFlashcard(card.question, card.answer, selectedLanguage);
+      setExplanation(response.data.data.explanation);
+      setShowExplanation(true);
+    } catch (err) {
+      setExplanationError(err.response?.data?.message || err.message || "Failed to generate explanation");
+    } finally {
+      setIsLoadingExplanation(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 p-4">
@@ -63,12 +100,47 @@ const FlashcardModal = ({ flashcards, isLoading, error, topicName, onClose, onRe
 
         <div className="relative perspective-container">
           <div className={`flashcard-3d ${isFlipped ? "flipped" : ""}`} onClick={() => setIsFlipped(f => !f)} style={{ cursor: "pointer" }}>
+
+            {/* FRONT */}
             <div className={`flashcard-face flashcard-front bg-gradient-to-br ${gradient} rounded-3xl p-12 shadow-2xl border-2 border-white/20 min-h-[400px] flex flex-col items-center justify-center`}>
               <p className="text-white text-2xl leading-relaxed font-medium drop-shadow-lg text-center">{card.question}</p>
             </div>
+
+            {/* BACK */}
             <div className={`flashcard-face flashcard-back bg-gradient-to-br ${gradient} rounded-3xl p-12 shadow-2xl border-2 border-white/20 min-h-[400px] flex flex-col items-center justify-center`}>
-              <p className="text-white text-2xl leading-relaxed font-medium drop-shadow-lg text-center">{card.answer}</p>
+              <div className="text-center w-full">
+                <p className="text-white text-2xl leading-relaxed font-medium drop-shadow-lg mb-6">{card.answer}</p>
+
+                {/* ── Explain button ── */}
+                <button
+                  onClick={handleExplain}
+                  disabled={isLoadingExplanation}
+                  className={`flex items-center gap-2 mx-auto px-4 py-2 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white rounded-lg text-sm transition border border-white/30 ${
+                    isLoadingExplanation ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                >
+                  {isLoadingExplanation
+                    ? <><Loader size={16} className="animate-spin" /> Loading...</>
+                    : <><RotateCcw size={16} /> {showExplanation ? "Hide" : "Explain"}</>
+                  }
+                </button>
+
+                {/* ── Explanation text ── */}
+                {showExplanation && explanation && (
+                  <div className="mt-4 p-4 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
+                    <p className="text-white text-base leading-relaxed">{explanation}</p>
+                  </div>
+                )}
+
+                {/* ── Explanation error ── */}
+                {explanationError && (
+                  <div className="mt-4 p-4 bg-red-500/20 backdrop-blur-sm rounded-lg border border-red-400/30">
+                    <p className="text-red-200 text-sm">{explanationError}</p>
+                  </div>
+                )}
+              </div>
             </div>
+
           </div>
         </div>
 

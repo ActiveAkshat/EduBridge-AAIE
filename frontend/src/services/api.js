@@ -83,4 +83,23 @@ export const generateImages = (data) =>
 export const generateQuickCheck = (topic, content) =>
   axios.post("/quickcheck", { topic, content });
 
+export const explainMindmap = (mindmapData) =>
+  axios.post(
+    `${API_BASE_URL}/explain_mindmap`,
+    { mindmap: mindmapData },
+    { responseType: "arraybuffer" }   // ← binary audio response
+  );
+
+export const generateInsights = (payload) =>
+  apiClient.post("/generate_insights", payload);
+
+// Explain Feature for Flashcards
+
+export const explainFlashcard = (question, answer, language) => 
+  apiClient.post("/explain_flashcard", { 
+    question, 
+    answer, 
+    language 
+  });
+
 export default apiClient;
