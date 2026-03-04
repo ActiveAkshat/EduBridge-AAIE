@@ -80,4 +80,7 @@ export const generateQuiz = (topic, text) =>
 export const generateImages = (data) =>
   apiClient.post("/generate_images", data);
 
+export const generateQuickCheck = (topic, content) =>
+  axios.post("/quickcheck", { topic, content });
+
 export default apiClient;

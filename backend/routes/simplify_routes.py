@@ -14,7 +14,7 @@ def simplify_text_route():
 
     client = initialize_simplify_client()
     try:
-        simplified = simplify_text(client, text)
-        return success_response(simplified)
+        simplified_formatted = simplify_text(client, text)
+        return success_response(simplified_formatted)
     except Exception as e:
         return error_response(str(e))

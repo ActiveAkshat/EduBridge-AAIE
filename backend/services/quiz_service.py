@@ -2,7 +2,6 @@ import json
 from openai import OpenAIError
 from utils.gemini_client import MODEL
 
-
 def generate_quiz(client, topic_title: str, simplified_text: str):
     """
     Generate a structured quiz from simplified textbook content.
@@ -100,7 +99,7 @@ Critical Rules:
 
             if len(q["options"]) != 4:
                 raise ValueError(f"Question {i} must have 4 options")
-            
+
             # Ensure correct_index is an integer between 0-3
             if not isinstance(q.get("correct_index"), int) or not (0 <= q["correct_index"] <= 3):
                 raise ValueError(f"Question {i} has invalid correct_index")

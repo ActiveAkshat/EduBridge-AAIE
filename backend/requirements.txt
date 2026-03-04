@@ -1,4 +1,4 @@
-Flask
+flask
 flask-cors
 python-dotenv
 PyMuPDF
@@ -9,3 +9,5 @@ deep-translator
 fpdf2
 python-docx
 ollama
+weasyprint
+anthropic
