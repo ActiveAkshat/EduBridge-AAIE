@@ -11,6 +11,7 @@ import QuizModal      from "../components/output/QuizModal";
 import ImagesModal    from "../components/output/ImagesModal";
 import InsightsModal  from "../components/output/InsightsModal";
 import useExportPDF   from "../hooks/useExportPDF";
+import ChatbotModal   from "../components/output/ChatbotModal";
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -70,6 +71,9 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
   const [insightsData, setInsightsData] = useState(null);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
   const [insightsError, setInsightsError] = useState(null);
+
+  // ── Chatbot state ─────────────────────────────────────────────
+  const [showChatbot, setShowChatbot] = useState(false);
 
   const chapterTitle = originalData?.chapter_title || topics[0]?.chapter || "Chapter Notes";
 
@@ -387,6 +391,12 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
     }
   };
 
+  // ── Chatbot ───────────────────────────────────────────────────
+  const openChatbot = () => {
+    if (!selectedTopic) return;
+    setShowChatbot(true);
+  };
+
   if (!topics.length) return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 flex items-center justify-center">
       <div className="text-center">
@@ -474,6 +484,7 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
             onQuiz={generateQuiz}
             onImages={generateImages}
             onInsights={generateInsights}
+            onDoubt={openChatbot}
           />
         </div>
       </main>
@@ -555,6 +566,14 @@ const Output = ({ extractedData, originalData, onBack, selectedLanguage }) => {
           topicName={selectedTopic?.topic}
           onClose={() => { setShowInsights(false); setInsightsData(null); setInsightsError(null); }}
           onRetry={generateInsights}
+        />
+      )}
+
+      {showChatbot && (
+        <ChatbotModal
+          selectedTopic={selectedTopic}
+          selectedLanguage={selectedLanguage}
+          onClose={() => setShowChatbot(false)}
         />
       )}
     </div>

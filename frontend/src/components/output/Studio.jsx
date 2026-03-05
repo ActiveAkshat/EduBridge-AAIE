@@ -1,4 +1,16 @@
-const Studio = ({ selectedTopic, isSimplifying, isTranslating, onMindmap, onFlashcards, onQuiz, onImages, onInsights }) => {
+// Studio.jsx — add onDoubt prop and wire up the Doubt Solver button
+
+const Studio = ({
+  selectedTopic,
+  isSimplifying,
+  isTranslating,
+  onMindmap,
+  onFlashcards,
+  onQuiz,
+  onImages,
+  onInsights,
+  onDoubt,          // ← NEW
+}) => {
   const enabled = selectedTopic && !isSimplifying && !isTranslating;
 
   const buttons = [
@@ -7,6 +19,7 @@ const Studio = ({ selectedTopic, isSimplifying, isTranslating, onMindmap, onFlas
     { label: "Quiz",           emoji: "🎮", color: "bg-yellow-600 hover:bg-yellow-700", onClick: onQuiz },
     { label: "Key Insights",   emoji: "💡", color: "bg-cyan-600 hover:bg-cyan-700",     onClick: onInsights },
     { label: "Concept Images", emoji: "🖼️", color: "bg-pink-600 hover:bg-pink-700",    onClick: onImages },
+    { label: "Doubt Solver",   emoji: "🤔", color: "bg-blue-600 hover:bg-blue-700",    onClick: onDoubt },  // ← NEW
   ];
 
   return (
